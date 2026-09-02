@@ -10,14 +10,22 @@ class Config:
     OLLAMA_HOST: str = "http://localhost:11434"
     OLLAMA_KEEP_ALIVE: str = "5m"
     LLM_NUM_CTX: int = 8192
-    TEMPERATURE: float = 0.7
+    TEMPERATURE: float = 0.3
+    ENABLE_THINKING: bool = True
 
     # Chunking Configurations
     CHUNK_SIZE: int = 500
-    CHUNK_OVERLAP: int = 50
+    CHUNK_OVERLAP: int = 100
+
+    # UI Configurations
+    FONT_SIZE: int = 10
 
     # Retrieval & Storage Configurations
-    TOP_K: int = 4
+    TOP_K: int = 6
+    RERANK_CANDIDATES: int = 12
+    ENABLE_RERANK: bool = True
+    RERANK_TIMEOUT: int = 25
+    DISTANCE_THRESHOLD: float = 1.15
     CHROMA_PERSIST_DIR: str = os.path.join(os.path.dirname(__file__), "chroma_db")
     DEFAULT_WORKSPACE: str = "Tài liệu chung"
 

@@ -28,9 +28,10 @@ class DocumentService:
         file_name: str,
         embed_model: str = config.EMBED_MODEL,
         chunk_size: int = config.CHUNK_SIZE,
-        chunk_overlap: int = config.CHUNK_OVERLAP
+        chunk_overlap: int = config.CHUNK_OVERLAP,
+        progress_callback=None
     ) -> Dict[str, Any]:
-        """Nạp file, cắt nhỏ theo chunking params động, nhúng vector và lưu vào Workspace hiện tại."""
+        """Nạp file, cắt nhỏ theo chunking params động, nhúng vector theo batch và lưu vào Workspace hiện tại."""
         # Check xem file đã nạp chưa trong workspace này
         indexed_files = self.vector_store.get_indexed_files()
         if file_name in indexed_files:
@@ -50,10 +51,10 @@ class DocumentService:
         metadata = {"file_name": file_name, "file_path": file_path, "workspace": self.vector_store.current_workspace}
         chunks = self.splitter_service.split_text(raw_text, metadata)
 
-        # 3. Tạo Embeddings & IDs
+        # 3. Tạo Embeddings theo Batch & IDs
         texts = [chunk["text"] for chunk in chunks]
         metadatas = [chunk["metadata"] for chunk in chunks]
-        embeddings = self.embedding_service.embed_batch(texts, model_name=embed_model)
+        embeddings = self.embedding_service.embed_batch(texts, model_name=embed_model, progress_callback=progress_callback)
 
         ids = [
             hashlib.md5(f"{self.vector_store.current_workspace}_{file_name}_{idx}_{chunk['text'][:20]}".encode()).hexdigest()

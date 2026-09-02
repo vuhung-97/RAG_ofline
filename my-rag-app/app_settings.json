@@ -1,0 +1,12 @@
+{
+  "selected_llm": "qwen3:1.7b",
+  "selected_embed": "embeddinggemma:300m",
+  "num_ctx": 8192,
+  "top_k": 6,
+  "temperature": 0.3,
+  "chunk_size": 500,
+  "chunk_overlap": 100,
+  "font_size": 12,
+  "enable_thinking": false,
+  "enable_rerank": true
+}
