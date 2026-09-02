@@ -1,7 +1,7 @@
 import sys
 import os
 
-# Thêm root dir vào sys.path để import các module dễ dàng
+# Thêm root dir vào sys.path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import streamlit as st
@@ -14,6 +14,7 @@ from services.document_service import DocumentService
 from services.rag_service import RAGService
 from ui.components.sidebar import render_sidebar
 from ui.components.chat_message import render_chat_messages
+from config import config
 
 # Cấu hình trang Streamlit
 st.set_page_config(
@@ -52,20 +53,20 @@ document_service, rag_service, vector_store = init_services()
 render_sidebar(document_service, vector_store)
 
 # Giao diện chính
-st.title("🔍 Tra Cứu Tài Liệu Offline (Local RAG)")
-st.caption("Chạy hoàn toàn trên máy tính cá nhân - Bảo mật - Không dùng Internet")
+st.title(f"🔍 Tra Cứu Tài Liệu - [{vector_store.current_workspace}]")
+st.caption(f"Chạy hoàn toàn Offline | Model LLM: {st.session_state.get('selected_llm', config.LLM_MODEL)} | Embedding: {st.session_state.get('selected_embed', config.EMBED_MODEL)}")
 
 # Render lịch sử tin nhắn
 render_chat_messages()
 
 # Khung nhập câu hỏi người dùng
-if prompt := st.chat_input("Đặt câu hỏi về tài liệu của bạn..."):
+if prompt := st.chat_input(f"Đặt câu hỏi trong nhóm '{vector_store.current_workspace}'..."):
     # 1. Hiển thị tin nhắn người dùng
     st.session_state.messages.append({"role": "user", "content": prompt})
     with st.chat_message("user"):
         st.markdown(prompt)
 
-    # 2. Xử lý tra cứu RAG & Stream câu trả lời
+    # 2. Xử lý tra cứu RAG & Stream câu trả lời với cấu hình động
     with st.chat_message("assistant"):
         with st.spinner("Đang tìm kiếm ngữ cảnh & suy luận..."):
             history_for_rag = [
@@ -73,7 +74,15 @@ if prompt := st.chat_input("Đặt câu hỏi về tài liệu của bạn..."):
                 for m in st.session_state.messages[:-1]
                 if m["role"] in ["user", "assistant"]
             ]
-            rag_res = rag_service.query(prompt, chat_history=history_for_rag)
+            rag_res = rag_service.query(
+                user_query=prompt,
+                chat_history=history_for_rag,
+                llm_model=st.session_state.get("selected_llm", config.LLM_MODEL),
+                embed_model=st.session_state.get("selected_embed", config.EMBED_MODEL),
+                top_k=st.session_state.get("top_k", config.TOP_K),
+                num_ctx=st.session_state.get("num_ctx", config.LLM_NUM_CTX),
+                temperature=st.session_state.get("temperature", config.TEMPERATURE)
+            )
 
         # Stream từng từ
         response_placeholder = st.empty()
