@@ -1,0 +1,14 @@
+# Virtual Environment
+my-rag-app/venv/
+venv/
+*.pyc
+__pycache__/
+
+# Database & Storage
+my-rag-app/chroma_db/
+chroma_db/
+
+# System / IDE
+.DS_Store
+.vscode/
+.idea/
