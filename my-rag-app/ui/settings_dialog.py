@@ -32,14 +32,24 @@ class SettingsDialog(QDialog):
         model_layout = QFormLayout()
         model_layout.setSpacing(10)
 
-        # LLM Model
+        # LLM Model - hiện đủ model để bạn tự chọn vai trò
+        all_models = self.installed_models.get("all", []) or self.installed_models.get("llm", []) + self.installed_models.get("embed", [])
+        # dedup giữ thứ tự
+        seen = set()
+        uniq_all = []
+        for m in all_models:
+            if m not in seen:
+                seen.add(m)
+                uniq_all.append(m)
         self.llm_combo = QComboBox()
-        self.llm_combo.addItems(self.installed_models.get("llm", []))
+        self.llm_combo.addItems(uniq_all)
+        self.llm_combo.setToolTip("Chọn bất kỳ model nào làm LLM - do bạn quyết định")
         model_layout.addRow("LLM Model:", self.llm_combo)
 
-        # Embedding Model
+        # Embedding Model - hiện đủ model để bạn tự chọn vai trò
         self.embed_combo = QComboBox()
-        self.embed_combo.addItems(self.installed_models.get("embed", []))
+        self.embed_combo.addItems(uniq_all)
+        self.embed_combo.setToolTip("Chọn bất kỳ model nào làm Embedding - do bạn quyết định")
         model_layout.addRow("Embedding Model:", self.embed_combo)
 
         model_group.setLayout(model_layout)
