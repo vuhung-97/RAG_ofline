@@ -1,11 +1,15 @@
 """Settings dialog cho việc cấu hình model và tham số."""
 
+import math
 from PyQt6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QFormLayout, QLabel,
     QComboBox, QSlider, QSpinBox, QDoubleSpinBox, QPushButton,
     QGroupBox, QFrame, QCheckBox
 )
 from PyQt6.QtCore import Qt, pyqtSignal
+
+OVERHEAD_TOKENS = 1000
+MAX_CHUNK_TOKENS = 500
 
 
 class SettingsDialog(QDialog):
@@ -81,7 +85,13 @@ class SettingsDialog(QDialog):
         self.top_k_spin.setMinimum(1)
         self.top_k_spin.setMaximum(10)
         self.top_k_spin.setValue(4)
+        self.top_k_spin.valueChanged.connect(self._on_top_k_changed)
         params_layout.addRow("Số đoạn tra cứu (Top-K):", self.top_k_spin)
+
+        # Info label (num_ctx tự động)
+        self.info_label = QLabel("")
+        self.info_label.setStyleSheet("color: #64748b; font-size: 10px;")
+        params_layout.addRow("💡 Tự động:", self.info_label)
 
         # Temperature
         self.temp_spin = QDoubleSpinBox()
@@ -91,22 +101,6 @@ class SettingsDialog(QDialog):
         self.temp_spin.setDecimals(1)
         self.temp_spin.setValue(0.7)
         params_layout.addRow("Độ sáng tạo (Temperature):", self.temp_spin)
-
-        # Chunk Size
-        self.chunk_spin = QSpinBox()
-        self.chunk_spin.setMinimum(100)
-        self.chunk_spin.setMaximum(2000)
-        self.chunk_spin.setSingleStep(50)
-        self.chunk_spin.setValue(500)
-        params_layout.addRow("Kích thước Chunk:", self.chunk_spin)
-
-        # Chunk Overlap
-        self.chunk_overlap_spin = QSpinBox()
-        self.chunk_overlap_spin.setMinimum(0)
-        self.chunk_overlap_spin.setMaximum(500)
-        self.chunk_overlap_spin.setSingleStep(10)
-        self.chunk_overlap_spin.setValue(100)
-        params_layout.addRow("Chunk Overlap:", self.chunk_overlap_spin)
 
         # Font Size
         self.font_spin = QSpinBox()
@@ -150,6 +144,26 @@ class SettingsDialog(QDialog):
 
         main_layout.addLayout(btn_layout)
 
+    @staticmethod
+    def _next_power_of_2(n: int) -> int:
+        """Trả về số mũ của 2 lớn hơn hoặc bằng n."""
+        if n <= 0:
+            return 2048
+        return 1 << math.ceil(math.log2(n))
+
+    def _on_top_k_changed(self, value: int):
+        """Tự động tính num_ctx dựa trên top_k (power of 2)."""
+        required = OVERHEAD_TOKENS + (value * MAX_CHUNK_TOKENS)
+        num_ctx = self._next_power_of_2(required)
+        num_ctx = max(2048, min(32768, num_ctx))
+
+        self.num_ctx_slider.blockSignals(True)
+        self.num_ctx_slider.setValue(num_ctx)
+        self.num_ctx_label.setText(str(num_ctx))
+        self.num_ctx_slider.blockSignals(False)
+
+        self.info_label.setText(f"Tự động: {num_ctx} token (cho {value} chunks × {MAX_CHUNK_TOKENS})")
+
     def _load_current_values(self):
         """Load giá trị hiện tại vào form."""
         settings = self.current_settings
@@ -170,11 +184,14 @@ class SettingsDialog(QDialog):
         self.num_ctx_slider.setValue(settings.get("num_ctx", 8192))
         self.top_k_spin.setValue(settings.get("top_k", 6))
         self.temp_spin.setValue(settings.get("temperature", 0.3))
-        self.chunk_spin.setValue(settings.get("chunk_size", 500))
-        self.chunk_overlap_spin.setValue(settings.get("chunk_overlap", 100))
         self.font_spin.setValue(settings.get("font_size", 10))
         self.thinking_check.setChecked(settings.get("enable_thinking", True))
         self.rerank_check.setChecked(settings.get("enable_rerank", True))
+
+        # Hiển thị info num_ctx tự động
+        top_k_val = settings.get("top_k", 6)
+        num_ctx_val = settings.get("num_ctx", 8192)
+        self.info_label.setText(f"Tự động: {num_ctx_val} token (cho {top_k_val} chunks × {MAX_CHUNK_TOKENS})")
 
     def _on_save(self):
         """Lưu cài đặt và emit signal."""
@@ -184,8 +201,6 @@ class SettingsDialog(QDialog):
             "num_ctx": self.num_ctx_slider.value(),
             "top_k": self.top_k_spin.value(),
             "temperature": self.temp_spin.value(),
-            "chunk_size": self.chunk_spin.value(),
-            "chunk_overlap": self.chunk_overlap_spin.value(),
             "font_size": self.font_spin.value(),
             "enable_thinking": self.thinking_check.isChecked(),
             "enable_rerank": self.rerank_check.isChecked(),
@@ -201,8 +216,6 @@ class SettingsDialog(QDialog):
             "num_ctx": self.num_ctx_slider.value(),
             "top_k": self.top_k_spin.value(),
             "temperature": self.temp_spin.value(),
-            "chunk_size": self.chunk_spin.value(),
-            "chunk_overlap": self.chunk_overlap_spin.value(),
             "font_size": self.font_spin.value(),
             "enable_thinking": self.thinking_check.isChecked(),
             "enable_rerank": self.rerank_check.isChecked(),

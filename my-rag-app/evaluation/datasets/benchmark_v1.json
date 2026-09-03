@@ -1,0 +1,192 @@
+{
+  "version": "1.0",
+  "document": "07_6_VuQuocHung_QLBH_taphoa_BTL.docx",
+  "created_at": "2026-09-03",
+  "description": "Benchmark dataset cho hệ thống RAG - tài liệu Quản lý bán hàng tạp hóa",
+  "questions": [
+    {
+      "id": "q01",
+      "question": "Trong hệ thống, mã quy trình QT04 và QT05 đại diện cho các quy trình nghiệp vụ nào?",
+      "category": "direct_factual",
+      "answerable": true,
+      "expected_sources": [
+        {"chapter": "CHƯƠNG I", "section": "1.1.3"}
+      ],
+      "expected_answer_key": "QT04: Báo cáo danh sách hàng hóa tồn kho. QT05: Báo cáo doanh thu.",
+      "expected_keywords": ["QT04", "QT05", "tồn kho", "doanh thu"]
+    },
+    {
+      "id": "q02",
+      "question": "Quy trình kiểm kê tồn kho (QT04) được diễn ra vào thời gian nào, quy định xử lý ra sao nếu số liệu thực tế không khớp với sổ sách?",
+      "category": "direct_factual",
+      "answerable": true,
+      "expected_sources": [
+        {"chapter": "CHƯƠNG I", "section": "1.1.3"}
+      ],
+      "expected_answer_key": "Thời gian: từ ngày 25 đến ngày cuối tháng, hoặc theo yêu cầu của tổng quản lý. Xử lý: thực hiện lại các bước kiểm kê (không quá 3 lần) trước khi nộp báo cáo.",
+      "expected_keywords": ["ngày 25", "cuối tháng", "kiểm kê", "không khớp"]
+    },
+    {
+      "id": "q03",
+      "question": "Để nâng cao tính bảo mật, tài liệu đã đề xuất bổ sung những bảng quản lý người dùng và bảng lưu vết (log) nào?",
+      "category": "direct_factual",
+      "answerable": true,
+      "expected_sources": [
+        {"chapter": "CHƯƠNG III", "section": "3.3.1"}
+      ],
+      "expected_answer_key": "Bảng quản lý: NGUOIDUNG, NHOMNGUOIDUNG, PHANQUYEN. Bảng log: LICHSU_DANGNHAP, LICHSU_HOATDONG, LICHSU_BACKUP.",
+      "expected_keywords": ["NGUOIDUNG", "NHOMNGUOIDUNG", "PHANQUYEN", "LICHSU_DANGNHAP", "LICHSU_HOATDONG", "LICHSU_BACKUP"]
+    },
+    {
+      "id": "q04",
+      "question": "Bảng CT_PHIEUNHAPKHO (Chi tiết phiếu nhập kho) gồm những trường nào và những trường nào đóng vai trò khóa chính?",
+      "category": "exact_keyword",
+      "answerable": true,
+      "expected_sources": [
+        {"chapter": "CHƯƠNG III", "section": "3.3.4"}
+      ],
+      "expected_answer_key": "Các trường: id_phieunhapkho, stt_hanghoa, soluongnhap, dongianhap, thanhtien. Khóa chính: id_phieunhapkho.",
+      "expected_keywords": ["CT_PHIEUNHAPKHO", "id_phieunhapkho", "khóa chính"]
+    },
+    {
+      "id": "q05",
+      "question": "Nhân viên bán hàng (nhóm N3) có những quyền hạn gì (Create, Read, Edit, Delete) trên các bảng DONDATHANG, PHIEUYEUCAU, HOADONBANHANG và HANGHOA?",
+      "category": "exact_keyword",
+      "answerable": true,
+      "expected_sources": [
+        {"chapter": "CHƯƠNG III", "section": "3.2.2"}
+      ],
+      "expected_answer_key": "N3 trên DONDATHANG: RD. N3 trên PHIEUYEUCAU: CE. N3 trên HOADONBANHANG: CER. N3 trên HANGHOA: R.",
+      "expected_keywords": ["N3", "DONDATHANG", "PHIEUYEUCAU", "HOADONBANHANG", "HANGHOA", "CERD"]
+    },
+    {
+      "id": "q06",
+      "question": "Cửa hàng có mấy bộ phận và chức năng chính của mỗi bộ phận là gì?",
+      "category": "semantic_paraphrase",
+      "answerable": true,
+      "expected_sources": [
+        {"chapter": "CHƯƠNG I", "section": "1.1.2"}
+      ],
+      "expected_answer_key": "3 bộ phận: BP01 - Bộ phận quản lý kho (kiểm tra hàng hóa, lập phiếu nhập/xuất kho), BP02 - Bộ phận tài chính (lập đơn đặt hàng, thanh toán, báo cáo doanh thu), BP03 - Bộ phận bán hàng (tiếp nhận yêu cầu, lập hóa đơn bán hàng).",
+      "expected_keywords": ["BP01", "BP02", "BP03", "quản lý kho", "tài chính", "bán hàng"]
+    },
+    {
+      "id": "q07",
+      "question": "Quy trình bán hàng (QT02) diễn ra như thế nào?",
+      "category": "semantic_paraphrase",
+      "answerable": true,
+      "expected_sources": [
+        {"chapter": "CHƯƠNG I", "section": "1.1.3"}
+      ],
+      "expected_answer_key": "Khách hàng đặt mua → bộ phận bán hàng tiếp nhận và kiểm tra tồn kho → hướng dẫn khách xem hàng → lập hóa đơn bán hàng (MB05) → bộ phận tài chính thanh toán → nếu khách đổi ý thì hủy hóa đơn và hoàn tiền.",
+      "expected_keywords": ["QT02", "khách hàng", "hóa đơn", "thanh toán"]
+    },
+    {
+      "id": "q08",
+      "question": "So sánh quy trình nhập kho (QT01) và xuất kho (QT03) khác nhau như thế nào?",
+      "category": "multi_chunk",
+      "answerable": true,
+      "expected_sources": [
+        {"chapter": "CHƯƠNG I", "section": "1.1.3"}
+      ],
+      "expected_answer_key": "QT01: Tài chính lập đơn đặt hàng → kho nhận hàng từ NCC → kiểm tra → lập phiếu nhập kho → sắp xếp hàng vào kho. QT03: Bán hàng lập phiếu yêu cầu → kho kiểm tra tồn kho → chuẩn bị hàng → lập phiếu xuất kho → giao hàng cho khách.",
+      "expected_keywords": ["QT01", "QT03", "nhập hàng", "xuất hàng", "phiếu"]
+    },
+    {
+      "id": "q09",
+      "question": "Hệ thống có những mẫu biểu (MB) nào và mỗi mẫu biểu dùng trong quy trình nào?",
+      "category": "multi_chunk",
+      "answerable": true,
+      "expected_sources": [
+        {"chapter": "CHƯƠNG I", "section": "1.1.4"}
+      ],
+      "expected_answer_key": "MB01 - Đơn đặt hàng (QT01), MB02 - Phiếu giao hàng (QT01), MB03 - Phiếu nhập kho (QT01), MB04 - Hóa đơn mua hàng (QT01), MB05 - Hóa đơn bán hàng (QT02), MB06 - Phiếu yêu cầu (QT03), MB07 - Phiếu xuất kho (QT03), MB08 - Báo cáo tồn kho (QT04), MB09 - Báo cáo doanh thu (QT05).",
+      "expected_keywords": ["MB01", "MB02", "MB03", "MB04", "MB05", "MB06", "MB07", "MB08", "MB09"]
+    },
+    {
+      "id": "q10",
+      "question": "Chính sách tích điểm thành viên và quy định bảo hành đổi trả sau 7 ngày của cửa hàng được thiết kế như thế nào?",
+      "category": "out_of_scope",
+      "answerable": false,
+      "expected_sources": [],
+      "expected_answer_key": "Tài liệu không đề cập đến thông tin này.",
+      "expected_keywords": ["không đề cập"]
+    },
+    {
+      "id": "q11",
+      "question": "Hệ thống này sử dụng cơ sở dữ liệu quan hệ cụ thể nào (MySQL, SQL Server hay PostgreSQL) và viết bằng ngôn ngữ lập trình gì?",
+      "category": "out_of_scope",
+      "answerable": false,
+      "expected_sources": [],
+      "expected_answer_key": "Tài liệu không đề cập đến thông tin này.",
+      "expected_keywords": ["không đề cập"]
+    },
+    {
+      "id": "q12",
+      "question": "Khách hàng muốn hủy hóa đơn và nhận lại tiền đã thanh toán thì phải đáp ứng điều kiện gì?",
+      "category": "direct_factual",
+      "answerable": true,
+      "expected_sources": [
+        {"chapter": "CHƯƠNG I", "section": "1.1.3"}
+      ],
+      "expected_answer_key": "Điều kiện: khách hàng đổi ý muốn trả hàng, bộ phận tài chính thực hiện hủy hóa đơn bán hàng (MB05) và hoàn thanh toán cho khách hàng.",
+      "expected_keywords": ["hủy hóa đơn", "hoàn tiền", "đổi ý", "trả hàng"]
+    },
+    {
+      "id": "q13",
+      "question": "Vì sao thuộc tính Còn nợ và Tổng tiền bị loại bỏ khi chuyển sang lược đồ quan hệ chuẩn hóa?",
+      "category": "semantic_paraphrase",
+      "answerable": true,
+      "expected_sources": [
+        {"chapter": "CHƯƠNG II", "section": "2.2.2"}
+      ],
+      "expected_answer_key": "Các trường Tổng tiền, Tổng tiền viết bằng chữ là trường tính toán (derived) bị loại bỏ khi chuẩn hóa để tránh redundancy. Tổng tiền = ∑(Thành tiền), nên không cần lưu trong bảng.",
+      "expected_keywords": ["chuẩn hóa", "Tổng tiền", "trường tính toán", "redundancy"]
+    },
+    {
+      "id": "q14",
+      "question": "Tóm tắt Chương I: Khảo sát hệ thống",
+      "category": "summary",
+      "answerable": true,
+      "expected_sources": [
+        {"chapter": "CHƯƠNG I", "section": "1.1"}
+      ],
+      "expected_answer_key": "Chương I gồm: Mô tả hệ thống (nhiệm vụ cơ bản, cơ cấu tổ chức 3 bộ phận), Quy trình xử lý (5 quy trình QT01-QT05), Mẫu biểu (MB01-MB09), Mô hình hóa (tiến trình nghiệp vụ, biểu đồ hoạt động).",
+      "expected_keywords": ["nhiệm vụ", "cơ cấu", "quy trình", "mẫu biểu"]
+    },
+    {
+      "id": "q15",
+      "question": "Tóm tắt thiết kế bảo mật của hệ thống",
+      "category": "summary",
+      "answerable": true,
+      "expected_sources": [
+        {"chapter": "CHƯƠNG III", "section": "3.3.1"}
+      ],
+      "expected_answer_key": "Thiết kế bảo mật gồm: thêm 6 bảng (3 bảng quản lý user: NGUOIDUNG, NHOMNGUOIDUNG, PHANQUYEN; 3 bảng log: LICHSU_DANGNHAP, LICHSU_HOATDONG, LICHSU_BACKUP), phân quyền 4 nhóm người dùng (N1-N4) với CERD trên từng bảng.",
+      "expected_keywords": ["bảo mật", "NGUOIDUNG", "PHANQUYEN", "LICHSU", "phân quyền"]
+    },
+    {
+      "id": "q16",
+      "question": "Nhóm N1 và N3 khác nhau quyền hạn trên bảng PHIEUNHAPKHO như thế nào?",
+      "category": "comparison",
+      "answerable": true,
+      "expected_sources": [
+        {"chapter": "CHƯƠNG III", "section": "3.2.2"}
+      ],
+      "expected_answer_key": "N1 (Nhân viên quản lý kho) có quyền CER (Create, Edit, Read) trên PHIEUNHAPKHO. N3 (Nhân viên bán hàng) chỉ có quyền RD (Read) trên PHIEUNHAPKHO.",
+      "expected_keywords": ["N1", "N3", "PHIEUNHAPKHO", "CER", "RD"]
+    },
+    {
+      "id": "q17",
+      "question": "Tổng quan về mô hình dữ liệu ban đầu và sau chuẩn hóa khác nhau như thế nào?",
+      "category": "comparison",
+      "answerable": true,
+      "expected_sources": [
+        {"chapter": "CHƯƠNG II", "section": "2.2.1"},
+        {"chapter": "CHƯƠNG II", "section": "2.2.2"}
+      ],
+      "expected_answer_key": "Dữ liệu ban đầu có nhiều trường lặp (Tổng tiền, tên cửa hàng nhận...). Sau chuẩn hóa: tách thành các bảng độc lập (DONDATHANG, CT_DONDATHANG, HANGHOA...), loại bỏ trường tính toán, thêm khóa ngoại.",
+      "expected_keywords": ["chuẩn hóa", "2NF", "3NF", "trường tính toán", "khóa ngoại"]
+    }
+  ]
+}

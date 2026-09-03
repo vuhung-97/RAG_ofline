@@ -12,14 +12,12 @@ class UploadWorker(QThread):
     finished = pyqtSignal(dict)  # result dict từ DocumentService
     error = pyqtSignal(str)
 
-    def __init__(self, document_service, file_paths, file_names, embed_model, chunk_size, chunk_overlap=100):
+    def __init__(self, document_service, file_paths, file_names, embed_model):
         super().__init__()
         self.document_service = document_service
         self.file_paths = file_paths
         self.file_names = file_names
         self.embed_model = embed_model
-        self.chunk_size = chunk_size
-        self.chunk_overlap = chunk_overlap
         self._is_cancelled = False
 
     def run(self):
@@ -42,8 +40,6 @@ class UploadWorker(QThread):
                     file_path=fpath,
                     file_name=fname,
                     embed_model=self.embed_model,
-                    chunk_size=self.chunk_size,
-                    chunk_overlap=self.chunk_overlap,
                     progress_callback=update_progress
                 )
                 self.finished.emit(result)
@@ -95,10 +91,19 @@ class StreamWorker(QThread):
 
             self.sources_ready.emit(result["sources"])
 
+            full_response = ""
             for token in result["stream"]:
                 if self._is_cancelled:
                     break
                 self.token_received.emit(token)
+                full_response += token
+
+            if not self._is_cancelled and full_response:
+                context_text = "\n".join([s.get("text", "") for s in result.get("sources", [])])
+                validated = self.rag_service._validate_answer(full_response, context_text)
+                if validated != full_response:
+                    self.token_received.emit("\n\n⚠️ [Guardrail] ")
+                    self.token_received.emit(validated)
 
         except Exception as e:
             self.error.emit(str(e))

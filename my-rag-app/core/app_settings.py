@@ -14,8 +14,6 @@ DEFAULTS: Dict[str, Any] = {
     "num_ctx": config.LLM_NUM_CTX,
     "top_k": config.TOP_K,
     "temperature": config.TEMPERATURE,
-    "chunk_size": config.CHUNK_SIZE,
-    "chunk_overlap": config.CHUNK_OVERLAP,
     "font_size": config.FONT_SIZE,
     "enable_thinking": config.ENABLE_THINKING,
     "enable_rerank": config.ENABLE_RERANK,

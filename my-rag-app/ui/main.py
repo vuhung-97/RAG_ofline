@@ -11,6 +11,7 @@ from PyQt6.QtWidgets import (
     QFrame, QHBoxLayout, QPushButton
 )
 from PyQt6.QtCore import Qt, QTimer
+from time import time as _time_now
 from PyQt6.QtGui import QFont
 
 from config import config, get_installed_models
@@ -19,7 +20,9 @@ from core.text_splitter import TextSplitterService
 from core.embedding_service import OllamaEmbeddingService
 from core.vector_store import ChromaVectorStore
 from core.llm_service import OllamaLLMService
+from core.bm25_index import BM25Index
 from core.app_settings import AppSettings
+from core.chat_logger import ChatLogger
 from services.document_service import DocumentService
 from services.rag_service import RAGService
 
@@ -48,15 +51,13 @@ class MainWindow(QMainWindow):
         # Khởi tạo services
         self._init_services()
 
-        # Session state (thay thế st.session_state) - load từ JSON
+        # Session state (thay thế st.session_state) - load từ JSON, chunk mặc định từ config
         self.messages = []
         self.selected_llm = persisted.get("selected_llm", config.LLM_MODEL)
         self.selected_embed = persisted.get("selected_embed", config.EMBED_MODEL)
         self.num_ctx = persisted.get("num_ctx", config.LLM_NUM_CTX)
         self.top_k = persisted.get("top_k", config.TOP_K)
         self.temperature = persisted.get("temperature", config.TEMPERATURE)
-        self.chunk_size = persisted.get("chunk_size", config.CHUNK_SIZE)
-        self.chunk_overlap = persisted.get("chunk_overlap", config.CHUNK_OVERLAP)
         self.enable_thinking = persisted.get("enable_thinking", config.ENABLE_THINKING)
         self.enable_rerank = persisted.get("enable_rerank", config.ENABLE_RERANK)
 
@@ -67,6 +68,11 @@ class MainWindow(QMainWindow):
 
         # Temp files cần cleanup
         self._temp_files = []
+
+        # Chat logger
+        self.chat_logger = ChatLogger()
+        self._query_start_ms = 0
+        self._current_query = ""
 
         # Setup UI
         self._setup_ui()
@@ -84,18 +90,25 @@ class MainWindow(QMainWindow):
         self.embedding_service = OllamaEmbeddingService()
         self.vector_store = ChromaVectorStore()
         self.llm_service = OllamaLLMService()
+        self.bm25_index = BM25Index()
+
+        # Try to load existing BM25 index
+        if config.BM25_ENABLED:
+            self.bm25_index.load()
 
         self.document_service = DocumentService(
             loader_factory=self.loader_factory,
             splitter_service=self.splitter_service,
             embedding_service=self.embedding_service,
-            vector_store=self.vector_store
+            vector_store=self.vector_store,
+            bm25_index=self.bm25_index
         )
 
         self.rag_service = RAGService(
             embedding_service=self.embedding_service,
             vector_store=self.vector_store,
-            llm_service=self.llm_service
+            llm_service=self.llm_service,
+            bm25_index=self.bm25_index
         )
 
     def _setup_ui(self):
@@ -275,9 +288,7 @@ class MainWindow(QMainWindow):
             self.document_service,
             temp_paths,
             file_names,
-            self.selected_embed,
-            self.chunk_size,
-            self.chunk_overlap
+            self.selected_embed
         )
         self.upload_worker.progress.connect(self._on_upload_progress)
         self.upload_worker.finished.connect(self._on_upload_finished)
@@ -321,6 +332,10 @@ class MainWindow(QMainWindow):
         """Xử lý khi user gửi tin nhắn."""
         if not text.strip():
             return
+
+        # Lưu query và bắt đầu đo thời gian
+        self._current_query = text
+        self._query_start_ms = int(_time_now() * 1000)
 
         # Hiển thị tin nhắn user
         self.chat_area.add_message("user", text)
@@ -395,6 +410,28 @@ class MainWindow(QMainWindow):
         self.chat_input.set_enabled(True)
         self.statusBar().showMessage("Sẵn sàng")
 
+        # Ghi log câu hỏi & câu trả lời
+        elapsed_ms = int(_time_now() * 1000) - self._query_start_ms if self._query_start_ms else 0
+        no_context = any(
+            kw in full_text for kw in ["Không tìm thấy", "không đề cập", "không có nội dung"]
+        ) if full_text else True
+        self.chat_logger.log_entry(
+            query=self._current_query,
+            response=full_text,
+            sources=sources,
+            settings={
+                "llm": self.selected_llm,
+                "embed": self.selected_embed,
+                "num_ctx": self.num_ctx,
+                "top_k": self.top_k,
+                "temperature": self.temperature,
+                "enable_thinking": self.enable_thinking,
+                "enable_rerank": self.enable_rerank,
+            },
+            no_context=no_context,
+            elapsed_ms=elapsed_ms,
+        )
+
     def _on_stream_error(self, error_msg):
         """Khi stream gặp lỗi."""
         if self.chat_area.is_typing_shown():
@@ -405,6 +442,16 @@ class MainWindow(QMainWindow):
         self.chat_input.set_enabled(True)
         self.statusBar().showMessage(f"❌ Lỗi: {error_msg}")
 
+        # Ghi log lỗi
+        elapsed_ms = int(_time_now() * 1000) - self._query_start_ms if self._query_start_ms else 0
+        self.chat_logger.log_entry(
+            query=self._current_query,
+            response=f"❌ Lỗi: {error_msg}",
+            settings={"llm": self.selected_llm},
+            elapsed_ms=elapsed_ms,
+            error=error_msg,
+        )
+
     def _on_settings_clicked(self):
         """Mở dialog cài đặt."""
         current_settings = {
@@ -413,8 +460,6 @@ class MainWindow(QMainWindow):
             "num_ctx": self.num_ctx,
             "top_k": self.top_k,
             "temperature": self.temperature,
-            "chunk_size": self.chunk_size,
-            "chunk_overlap": self.chunk_overlap,
             "font_size": self.font_size,
             "enable_thinking": self.enable_thinking,
             "enable_rerank": self.enable_rerank,
@@ -436,8 +481,6 @@ class MainWindow(QMainWindow):
         self.num_ctx = settings["num_ctx"]
         self.top_k = settings["top_k"]
         self.temperature = settings["temperature"]
-        self.chunk_size = settings["chunk_size"]
-        self.chunk_overlap = settings.get("chunk_overlap", self.chunk_overlap)
         self.font_size = settings.get("font_size", self.font_size)
         self.enable_thinking = settings.get("enable_thinking", self.enable_thinking)
         self.enable_rerank = settings.get("enable_rerank", self.enable_rerank)
@@ -450,8 +493,6 @@ class MainWindow(QMainWindow):
                 "num_ctx": self.num_ctx,
                 "top_k": self.top_k,
                 "temperature": self.temperature,
-                "chunk_size": self.chunk_size,
-                "chunk_overlap": self.chunk_overlap,
                 "font_size": self.font_size,
                 "enable_thinking": self.enable_thinking,
                 "enable_rerank": self.enable_rerank,

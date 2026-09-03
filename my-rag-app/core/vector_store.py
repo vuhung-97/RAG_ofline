@@ -39,14 +39,52 @@ class ChromaVectorStore:
         return names
 
     def delete_workspace(self, workspace_name: str):
-        """Xóa một workspace cụ thể."""
+        """Xóa một workspace cụ thể - xóa luôn vật lý (folder UUID + VACUUM)."""
         sanitized = self._sanitize_name(workspace_name)
+        # lấy uuid trước khi xóa để xóa folder vật lý
+        uuid_to_delete = None
+        try:
+            cols = {c.name: getattr(c, "id", None) for c in self.client.list_collections()}
+            uuid_to_delete = cols.get(sanitized)
+        except Exception:
+            pass
         try:
             self.client.delete_collection(name=sanitized)
         except Exception:
             pass
+        # xóa folder vật lý chroma_db/<uuid> nếu còn
+        if uuid_to_delete:
+            try:
+                import shutil
+                folder = os.path.join(config.CHROMA_PERSIST_DIR, str(uuid_to_delete))
+                if os.path.isdir(folder):
+                    shutil.rmtree(folder)
+            except Exception:
+                pass
+            # VACUUM để shrink sqlite (không bắt buộc, thử best-effort)
+            try:
+                import sqlite3
+                db_path = os.path.join(config.CHROMA_PERSIST_DIR, "chroma.sqlite3")
+                if os.path.exists(db_path):
+                    con = sqlite3.connect(db_path)
+                    con.execute("VACUUM")
+                    con.close()
+            except Exception:
+                pass
         if self.current_workspace == workspace_name:
             self.set_workspace(config.DEFAULT_WORKSPACE)
+
+    def delete_file(self, file_name: str) -> int:
+        """Xóa 1 file trong workspace hiện tại - giữ nhóm, không xóa folder."""
+        try:
+            data = self.collection.get(where={"file_name": file_name})
+            ids = data.get("ids", []) if data else []
+            if ids:
+                self.collection.delete(ids=ids)
+                return len(ids)
+        except Exception:
+            pass
+        return 0
 
     def add_documents(self, ids: List[str], embeddings: List[List[float]], documents: List[str], metadatas: List[Dict[str, Any]]):
         """Thêm danh sách vector và văn bản vào collection hiện tại."""
@@ -66,11 +104,18 @@ class ChromaVectorStore:
 
         formatted_results = []
         if results and results["documents"] and len(results["documents"]) > 0:
+            ids = results["ids"][0] if results["ids"] else []
             docs = results["documents"][0]
             metas = results["metadatas"][0] if results["metadatas"] else [{}] * len(docs)
             distances = results["distances"][0] if results["distances"] else [0.0] * len(docs)
 
-            for doc, meta, dist in zip(docs, metas, distances):
+            for cid, doc, meta, dist in zip(ids, docs, metas, distances):
+                # Filter out poor quality results
+                if dist > config.DISTANCE_THRESHOLD:
+                    continue
+                # Use chunk_id from metadata if available, else use ChromaDB ID
+                if "chunk_id" not in meta:
+                    meta["chunk_id"] = cid
                 formatted_results.append({
                     "text": doc,
                     "metadata": meta,
@@ -88,10 +133,14 @@ class ChromaVectorStore:
         return list(files)
 
     def clear_store(self):
-        """Xóa toàn bộ dữ liệu trong workspace hiện tại."""
+        """Xóa toàn bộ dữ liệu trong workspace hiện tại - giữ tên nhóm (clear, không xóa vật lý tên)."""
         sanitized = self._sanitize_name(self.current_workspace)
         try:
             self.client.delete_collection(name=sanitized)
         except Exception:
             pass
         self.collection = self.client.get_or_create_collection(name=sanitized)
+
+    def clear_store_physical(self):
+        """Xóa vật lý nhóm hiện tại - xóa luôn tên nhóm khỏi dropdown."""
+        self.delete_workspace(self.current_workspace)

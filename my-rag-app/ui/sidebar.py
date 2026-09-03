@@ -171,7 +171,7 @@ class Sidebar(QWidget):
         self.workspace_combo.blockSignals(False)
 
     def _refresh_file_list(self):
-        """Làm mới danh sách file đã nạp."""
+        """Làm mới danh sách file đã nạp - mỗi dòng có nút xóa."""
         # Clear existing items
         while self.file_list_layout.count() > 1:
             item = self.file_list_layout.takeAt(0)
@@ -183,12 +183,57 @@ class Sidebar(QWidget):
         if files:
             self.file_list_label.setVisible(True)
             for f in files:
+                row = QWidget()
+                row_layout = QHBoxLayout(row)
+                row_layout.setContentsMargins(0, 0, 0, 0)
+                row_layout.setSpacing(4)
+
                 label = QLabel(f"• {f}")
                 label.setObjectName("file_item")
                 label.setWordWrap(True)
-                self.file_list_layout.insertWidget(self.file_list_layout.count() - 1, label)
+                row_layout.addWidget(label, 1)
+
+                btn_del = QPushButton("🗑️")
+                btn_del.setFixedSize(28, 22)
+                btn_del.setToolTip(f"Xóa file {f}")
+                btn_del.setStyleSheet("""
+                    QPushButton {
+                        background-color: transparent;
+                        border: 1px solid #e2e8f0;
+                        border-radius: 4px;
+                        font-size: 10pt;
+                        padding: 0;
+                    }
+                    QPushButton:hover {
+                        background-color: #fee2e2;
+                        border-color: #fecaca;
+                    }
+                """)
+                btn_del.clicked.connect(lambda _, fname=f: self._on_delete_file(fname))
+                row_layout.addWidget(btn_del)
+
+                self.file_list_layout.insertWidget(self.file_list_layout.count() - 1, row)
         else:
             self.file_list_label.setVisible(False)
+
+    def _on_delete_file(self, file_name):
+        """Xóa 1 file trong nhóm hiện tại - giữ nhóm, chỉ Yes/No."""
+        reply = QMessageBox.question(
+            self, "Xác nhận",
+            f"Bạn có chắc muốn xóa file '{file_name}' khỏi nhóm '{self.vector_store.current_workspace}'?",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+        )
+        if reply == QMessageBox.StandardButton.Yes:
+            n = self.vector_store.delete_file(file_name)
+            self._refresh_file_list()
+            # chỉ xóa file, không xóa chat
+            if n > 0:
+                self.status_label.setText(f"Đã xóa {file_name} ({n} chunks)")
+                self.status_label.setVisible(True)
+                QTimer.singleShot(3000, lambda: self.status_label.setVisible(False))
+            else:
+                self.status_label.setText(f"Không tìm thấy file {file_name}")
+                self.status_label.setVisible(True)
 
     def _on_workspace_changed(self, name):
         """Xử lý khi chọn workspace mới."""
@@ -218,16 +263,18 @@ class Sidebar(QWidget):
             self.chat_cleared.emit()
 
     def _on_clear_workspace(self):
-        """Xóa toàn bộ dữ liệu trong workspace."""
+        """Xóa toàn bộ nhóm - xóa luôn tên nhóm vật lý."""
         ws_name = self.vector_store.current_workspace
         reply = QMessageBox.question(
             self, "Xác nhận",
-            f"Bạn có chắc muốn xóa toàn bộ nhóm '{ws_name}'?\nHành động này không thể hoàn tác.",
+            f"Bạn có chắc muốn xóa toàn bộ nhóm '{ws_name}'?\nTên nhóm sẽ bị xóa khỏi danh sách và không thể hoàn tác.",
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
         )
         if reply == QMessageBox.StandardButton.Yes:
-            self.vector_store.clear_store()
+            self.vector_store.delete_workspace(ws_name)
+            self._refresh_workspaces()
             self._refresh_file_list()
+            self.workspace_changed.emit(self.vector_store.current_workspace)
             self.chat_cleared.emit()
 
     def _on_upload_files(self):

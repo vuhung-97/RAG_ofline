@@ -10,12 +10,21 @@ class Config:
     OLLAMA_HOST: str = "http://localhost:11434"
     OLLAMA_KEEP_ALIVE: str = "5m"
     LLM_NUM_CTX: int = 8192
-    TEMPERATURE: float = 0.3
+    TEMPERATURE: float = 0.0
     ENABLE_THINKING: bool = True
+
+    # Embedding Prefixes (EmbeddingGemma asymmetric encoding)
+    EMBED_QUERY_PREFIX: str = "task: search result | query: "
+    EMBED_DOC_PREFIX: str = "task: search result | document: "
+    EMBED_DIMENSION: int = 768
 
     # Chunking Configurations
     CHUNK_SIZE: int = 500
-    CHUNK_OVERLAP: int = 100
+    CHUNK_OVERLAP: int = 150
+    TABLE_MAX: int = 800
+    CHUNK_TOKENS: int = 400
+    OVERLAP_TOKENS: int = 150
+    CHUNK_TOKENS_MAX: int = 500
 
     # UI Configurations
     FONT_SIZE: int = 10
@@ -25,9 +34,34 @@ class Config:
     RERANK_CANDIDATES: int = 12
     ENABLE_RERANK: bool = True
     RERANK_TIMEOUT: int = 25
-    DISTANCE_THRESHOLD: float = 1.15
+    DISTANCE_THRESHOLD: float = 1.10
     CHROMA_PERSIST_DIR: str = os.path.join(os.path.dirname(__file__), "chroma_db")
     DEFAULT_WORKSPACE: str = "Tài liệu chung"
+
+    # Hybrid Search (BM25 + Semantic)
+    BM25_ENABLED: bool = True
+    BM25_TOP_K: int = 8
+    BM25_INDEX_PATH: str = os.path.join(os.path.dirname(__file__), "bm25_index")
+    SEMANTIC_TOP_K: int = 8
+    FINAL_TOP_K: int = 8
+    FUSION_METHOD: str = "rrf"
+    RRF_K: int = 60
+
+    # Similarity Threshold
+    SIMILARITY_THRESHOLD: float = 0.75
+    USE_ADAPTIVE_THRESHOLD: bool = True
+
+    # Context Budget
+    MAX_CONTEXT_CHUNKS: int = 8
+    MAX_CONTEXT_TOKENS: int = 3000
+
+    # Neighbor Expansion
+    ENABLE_NEIGHBOR_EXPANSION: bool = True
+    NEIGHBOR_SAME_SECTION_ONLY: bool = True
+    NEIGHBOR_MAX_EXPANSION: int = 1
+
+    # Performance Logging
+    ENABLE_PERF_LOGGING: bool = True
 
 config = Config()
 
