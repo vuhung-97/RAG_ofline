@@ -9,7 +9,7 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtCore import Qt, pyqtSignal
 
 OVERHEAD_TOKENS = 1000
-MAX_CHUNK_TOKENS = 500
+MAX_CHUNK_TOKENS = 750  # CHUNK_SIZE = 750 chars, neighbors merged vào → chunk lớn hơn
 
 
 class SettingsDialog(QDialog):
@@ -153,7 +153,7 @@ class SettingsDialog(QDialog):
 
     def _on_top_k_changed(self, value: int):
         """Tự động tính num_ctx dựa trên top_k (power of 2)."""
-        required = OVERHEAD_TOKENS + (value * MAX_CHUNK_TOKENS)
+        required = OVERHEAD_TOKENS + (value * MAX_CHUNK_TOKENS * 2)  # ×2 cho table merge
         num_ctx = self._next_power_of_2(required)
         num_ctx = max(2048, min(32768, num_ctx))
 

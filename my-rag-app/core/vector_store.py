@@ -28,12 +28,22 @@ class ChromaVectorStore:
         """Đổi nhóm tài liệu / workspace hiện tại."""
         self.current_workspace = workspace_name
         sanitized = self._sanitize_name(workspace_name)
-        self.collection = self.client.get_or_create_collection(name=sanitized)
+        self.collection = self.client.get_or_create_collection(
+            name=sanitized,
+            metadata={"original_name": workspace_name}
+        )
 
     def list_workspaces(self) -> List[str]:
-        """Lấy danh sách tên tất cả các workspace hiện có."""
+        """Lấy danh sách tên tất cả các workspace hiện có (tên gốc, không phải sanitized)."""
         collections = self.client.list_collections()
-        names = [c.name for c in collections]
+        names = []
+        for c in collections:
+            try:
+                col = self.client.get_collection(c.name)
+                original = col.metadata.get("original_name", c.name) if col.metadata else c.name
+                names.append(original)
+            except Exception:
+                names.append(c.name)
         if not names:
             names = [self.current_workspace]
         return names

@@ -18,8 +18,19 @@ QUY TẮC:
 1. CHỈ dùng thông tin có trong Context.
 2. KHÔNG thêm kiến thức ngoài Context.
 3. Nếu Context KHÔNG có thông tin → trả lời ngay: "Tài liệu không đề cập đến thông tin này."
-4. Mỗi câu trả lời phải có trích nguồn [1][2].
-5. Trả lời ngắn gọn, rõ ràng.
+4. Mỗi câu trả lời PHẢI có trích nguồn [1][2] ngay sau câu tương ứng.
+5. Chỉ được trích nguồn trong khoảng [1]-[{num_chunks}].
+6. Trả lời ngắn gọn, rõ ràng.
+7. Kết thúc mỗi câu trả lời PHẢI có đoạn "Trích nguồn:" liệt kê TẤT CẢ nguồn đã dùng, mỗi nguồn 1 dòng theo format:
+   [idx] (Tài liệu: {{file_name}} | Chương: {{chapter}} | Mục: {{heading}}) "nội dung ngắn khoảng 20 ký tự..."
+
+VÍ DỤ:
+Bảng NGUOIDUNG có các thuộc tính sau:
+1. id_nguoidung - Mã người dùng (C(6), Số nguyên) [1]
+2. tennguoidung - Tên người dùng (C(50), Chữ cái) [1]
+
+Trích nguồn:
+[1] (Tài liệu: example.docx | Chương: CHƯƠNG III. THIẾT KẾ HỆ THỐNG | Mục: 3.3. Thiết kế cơ sở dữ liệu) "Bảng NGUOIDUNG có các thuộc tính..."
 
 Ngữ cảnh:
 {context}
@@ -28,9 +39,12 @@ Ngữ cảnh:
 YESNO_PROMPT = """Bạn là trợ lý tra cứu tài liệu. Trả lời CÓ/KHÔNG dựa trên ngữ cảnh.
 
 QUY TẮC:
-1. Context CÓ thông tin → trả lời "Có" + trích dẫn [1][2].
+1. Context CÓ thông tin → trả lời "Có" + giải thích ngắn + trích dẫn [1][2].
 2. Context KHÔNG có → trả lời: "Không, trong tài liệu không có nội dung về [chủ đề]."
-3. KHÔNG bịa đặt.
+3. Chỉ được trích nguồn trong khoảng [1]-[{num_chunks}].
+4. KHÔNG bịa đặt.
+5. Kết thúc mỗi câu trả lời PHẢI có đoạn "Trích nguồn:" liệt kê TẤT CẢ nguồn đã dùng, mỗi nguồn 1 dòng theo format:
+   [idx] (Tài liệu: {{file_name}} | Chương: {{chapter}} | Mục: {{heading}}) "nội dung ngắn khoảng 20 ký tự..."
 
 Ngữ cảnh:
 {context}
@@ -42,8 +56,11 @@ QUY TẮC:
 1. CHỈ tóm tắt nội dung có trong Context.
 2. KHÔNG thêm thông tin ngoài Context.
 3. Tóm tắt 100-300 từ, có cấu trúc bullet.
-4. Mỗi bullet trích nguồn [1][2].
-5. Nếu Context KHÔNG có thông tin → ghi: "Phần này không có trong tài liệu."
+4. Mỗi bullet PHẢI trích nguồn [1][2].
+5. Chỉ được trích nguồn trong khoảng [1]-[{num_chunks}].
+6. Nếu Context KHÔNG có thông tin → ghi: "Phần này không có trong tài liệu."
+7. Kết thúc mỗi câu trả lời PHẢI có đoạn "Trích nguồn:" liệt kê TẤT CẢ nguồn đã dùng, mỗi nguồn 1 dòng theo format:
+   [idx] (Tài liệu: {{file_name}} | Chương: {{chapter}} | Mục: {{heading}}) "nội dung ngắn khoảng 20 ký tự..."
 
 Ngữ cảnh:
 {context}
@@ -54,9 +71,12 @@ EXTRACT_PROMPT = """Bạn là trợ lý trích xuất nguyên văn. Copy NGUYÊN
 QUY TẮC:
 1. CHỈ copy những gì CÓ TRONG Context.
 2. Giữ nguyên định dạng (bảng, xuống dòng).
-3. Trích nguồn [1] ở cuối.
-4. KHÔNG tạo nội dung mới.
-5. Nếu Context KHÔNG có → nói: "Tài liệu không đề cập đến thông tin này."
+3. Mỗi dòng PHẢI có trích nguồn [idx] ở cuối.
+4. Chỉ được trích nguồn trong khoảng [1]-[{num_chunks}].
+5. KHÔNG tạo nội dung mới.
+6. Nếu Context KHÔNG có → nói: "Tài liệu không đề cập đến thông tin này."
+7. Kết thúc mỗi câu trả lời PHẢI có đoạn "Trích nguồn:" liệt kê TẤT CẢ nguồn đã dùng, mỗi nguồn 1 dòng theo format:
+   [idx] (Tài liệu: {{file_name}} | Chương: {{chapter}} | Mục: {{heading}}) "nội dung ngắn khoảng 20 ký tự..."
 
 Ngữ cảnh:
 {context}
@@ -65,9 +85,12 @@ Ngữ cảnh:
 LOCATE_PROMPT = """Bạn là trợ lý định vị tài liệu. Chỉ trả VỊ TRÍ nội dung.
 
 QUY TẮC:
-1. Format: - [idx] Tài liệu: {{file_name}} | Chương: {{chapter}} | Mục: {{heading}} [idx]
-2. CHỉ liệt kê vị trí CÓ nội dung trong Context.
-3. Nếu KHÔNG có → báo: "Không tìm thấy vị trí phù hợp."
+1. Format: [idx] Tài liệu: {{file_name}} | Chương: {{chapter}} | Mục: {{heading}}) "nội dung ngắn khoảng 20 ký tự..."
+2. CHỈ liệt kê vị trí CÓ nội dung trong Context.
+3. Chỉ được trích nguồn trong khoảng [1]-[{num_chunks}].
+4. Nếu KHÔNG có → báo: "Không tìm thấy vị trí phù hợp."
+5. Kết thúc mỗi câu trả lời PHẢI có đoạn "Trích nguồn:" liệt kê TẤT CẢ nguồn đã dùng, mỗi nguồn 1 dòng theo format:
+   [idx] (Tài liệu: {{file_name}} | Chương: {{chapter}} | Mục: {{heading}}) "nội dung ngắn khoảng 20 ký tự..."
 
 Ngữ cảnh:
 {context}
@@ -274,9 +297,9 @@ class RAGService:
         # 3. Hybrid search (Semantic + BM25 + RRF)
         fused_results = self._hybrid_search(
             user_query, query_vector,
-            semantic_top_k=config.SEMANTIC_TOP_K,
-            bm25_top_k=config.BM25_TOP_K,
-            final_top_k=config.FINAL_TOP_K,
+            semantic_top_k=top_k,
+            bm25_top_k=top_k,
+            final_top_k=top_k,
             intent=intent
         )
 
@@ -294,18 +317,21 @@ class RAGService:
         else:
             expanded = deduped
 
-        # 6. Context budget
-        final_chunks = expanded[:config.MAX_CONTEXT_CHUNKS]
+        # 6. Context budget (neighbors đã merge vào chunk gốc → số chunks = top_k)
+        final_chunks = expanded[:top_k]
 
-        # 7. Format context
-        formatted_context = build_context(
+        # 7. Format context (build_context tự merge table chunks bên trong)
+        formatted_context, merged_chunks = build_context(
             final_chunks,
-            max_chunks=config.MAX_CONTEXT_CHUNKS,
+            max_chunks=top_k,
             max_tokens=config.MAX_CONTEXT_TOKENS
         )
 
-        # 8. Format sources for UI
-        sources = format_sources_for_ui(final_chunks)
+        # Số chunks thực tế (dùng để giới hạn citation range [1]-[N])
+        num_chunks = len(merged_chunks)
+
+        # 8. Format sources for UI (= merged chunks, không cần cap)
+        sources = format_sources_for_ui(merged_chunks)
 
         # 9. Relevance check
         if not formatted_context or formatted_context.strip() == "":
@@ -336,7 +362,7 @@ class RAGService:
         else:
             prompt_template = SYSTEM_PROMPT
 
-        system_content = prompt_template.format(context=formatted_context)
+        system_content = prompt_template.format(context=formatted_context, num_chunks=num_chunks)
 
         # 11. Build messages
         messages = [{"role": "system", "content": system_content}]

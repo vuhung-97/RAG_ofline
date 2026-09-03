@@ -2,7 +2,6 @@
 
 import sys
 import os
-import re
 
 # Thêm root dir vào sys.path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -228,6 +227,9 @@ class MainWindow(QMainWindow):
             # Update tất cả chat messages hiện có với font_size inject vào HTML
             if hasattr(self, "chat_area"):
                 self.chat_area._force_font_update(font_size)
+            # Update font size cho input box và send button
+            if hasattr(self, "chat_input"):
+                self.chat_input.update_font_size(font_size)
 
     def _load_models(self):
         """Tải danh sách model từ Ollama."""
@@ -360,7 +362,6 @@ class MainWindow(QMainWindow):
             self.enable_rerank
         )
         self.stream_worker.token_received.connect(self._on_token_received)
-        self.stream_worker.sources_ready.connect(self._on_sources_ready)
         self.stream_worker.answer_replaced.connect(self._on_answer_replaced)
         self.stream_worker.finished.connect(self._on_stream_finished)
         self.stream_worker.error.connect(self._on_stream_error)
@@ -374,10 +375,6 @@ class MainWindow(QMainWindow):
             if not self.chat_area._streaming_bubble:
                 self.chat_area.create_streaming_message()
         self.chat_area.append_streaming_token(token)
-
-    def _on_sources_ready(self, sources):
-        """Lưu sources để dùng khi finish."""
-        self._current_sources = sources
 
     def _on_answer_replaced(self, new_text):
         """Guardrail fail → replace toàn bộ answer bằng thông báo."""
@@ -400,22 +397,13 @@ class MainWindow(QMainWindow):
         else:
             full_text = ""
 
-        sources = getattr(self, '_current_sources', [])
-
-        # Filter sources: chỉ giữ nguồn được citation trong answer [1], [2]...
-        if full_text and sources:
-            cited = set(map(int, re.findall(r'\[(\d+)\]', full_text)))
-            if cited:
-                sources = [s for i, s in enumerate(sources, 1) if i in cited]
-
         # Finalize streaming
-        self.chat_area.finalize_streaming(full_text, sources)
+        self.chat_area.finalize_streaming(full_text)
 
         # Lưu vào messages
         self.messages.append({
             "role": "assistant",
             "content": full_text,
-            "sources": sources
         })
 
         # Enable input
@@ -430,7 +418,7 @@ class MainWindow(QMainWindow):
         self.chat_logger.log_entry(
             query=self._current_query,
             response=full_text,
-            sources=sources,
+            sources=[],
             settings={
                 "llm": self.selected_llm,
                 "embed": self.selected_embed,

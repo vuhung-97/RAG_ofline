@@ -19,8 +19,9 @@ class Config:
     EMBED_DIMENSION: int = 768
 
     # Chunking Configurations (MarkItDown + LangChain RecursiveCharacterTextSplitter)
-    CHUNK_SIZE: int = 500
-    CHUNK_OVERLAP: int = 150
+    CHUNK_SIZE: int = 750
+    CHUNK_OVERLAP: int = 200
+    TABLE_MAX_CHARS: int = 8000  # Max ký tự cho 1 bảng sau merge (~2000 tokens)
 
     # UI Configurations
     FONT_SIZE: int = 10
@@ -48,7 +49,6 @@ class Config:
     USE_ADAPTIVE_THRESHOLD: bool = True
 
     # Context Budget
-    MAX_CONTEXT_CHUNKS: int = 8
     MAX_CONTEXT_TOKENS: int = 3000
 
     # Neighbor Expansion

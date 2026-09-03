@@ -1,4 +1,4 @@
-"""Neighbor expansion — SRP: chỉ mở rộng context từ chunk lân cận."""
+"""Neighbor expansion — SRP: merge chunk lân cận vào chunk gốc."""
 
 from typing import List, Dict, Any
 
@@ -10,7 +10,9 @@ def expand_neighbors(
     same_section_only: bool = True
 ) -> List[Dict[str, Any]]:
     """
-    Mở rộng kết quả retrieval bằng chunk lân cận (previous/next).
+    Merge chunk lân cận (previous/next) VÀO chunk gốc thay vì tạo chunk mới.
+
+    Kết quả: số chunks giữ nguyên = top_k, nhưng mỗi chunk giàu nội dung hơn.
 
     Args:
         results: retrieved chunks (đã dedup, sorted by relevance)
@@ -18,30 +20,23 @@ def expand_neighbors(
         max_expansion: max chunks thêm mỗi bên (per result)
         same_section_only: chỉ thêm nếu cùng section/chapter
     """
-    expanded_ids = set()
     expanded_results = []
 
     for result in results:
         chunk_id = result.get("chunk_id", "")
-        if not chunk_id or chunk_id in expanded_ids:
-            continue
-
-        expanded_results.append(result)
-        expanded_ids.add(chunk_id)
-
         chunk_info = all_chunks_map.get(chunk_id, {})
         if not chunk_info:
+            expanded_results.append(result)
             continue
 
         doc_name = result.get("metadata", {}).get("file_name", "")
         section = result.get("metadata", {}).get("heading", "")
 
-        # Expand previous chunks
+        # Lấy prev chunks
+        prev_texts = []
         prev_id = chunk_info.get("prev_id")
         added_prev = 0
         while prev_id and added_prev < max_expansion:
-            if prev_id in expanded_ids:
-                break
             prev_chunk = all_chunks_map.get(prev_id)
             if not prev_chunk:
                 break
@@ -50,26 +45,15 @@ def expand_neighbors(
                 prev_doc = prev_chunk.get("metadata", {}).get("file_name", "")
                 if prev_doc != doc_name or prev_section != section:
                     break
-            prev_result = {
-                "chunk_id": prev_id,
-                "text": prev_chunk["text"],
-                "metadata": prev_chunk["metadata"],
-                "rrf_score": 0.0,
-                "semantic_score": 0.0,
-                "bm25_score": 0.0,
-                "is_expanded": True
-            }
-            expanded_results.append(prev_result)
-            expanded_ids.add(prev_id)
+            prev_texts.insert(0, prev_chunk["text"])
             prev_id = prev_chunk.get("prev_id")
             added_prev += 1
 
-        # Expand next chunks
+        # Lấy next chunks
+        next_texts = []
         next_id = chunk_info.get("next_id")
         added_next = 0
         while next_id and added_next < max_expansion:
-            if next_id in expanded_ids:
-                break
             next_chunk = all_chunks_map.get(next_id)
             if not next_chunk:
                 break
@@ -78,18 +62,16 @@ def expand_neighbors(
                 next_doc = next_chunk.get("metadata", {}).get("file_name", "")
                 if next_doc != doc_name or next_section != section:
                     break
-            next_result = {
-                "chunk_id": next_id,
-                "text": next_chunk["text"],
-                "metadata": next_chunk["metadata"],
-                "rrf_score": 0.0,
-                "semantic_score": 0.0,
-                "bm25_score": 0.0,
-                "is_expanded": True
-            }
-            expanded_results.append(next_result)
-            expanded_ids.add(next_id)
+            next_texts.append(next_chunk["text"])
             next_id = next_chunk.get("next_id")
             added_next += 1
+
+        # Merge: prev + gốc + next
+        merged_text = "\n".join(prev_texts + [result["text"]] + next_texts)
+
+        expanded_results.append({
+            **result,
+            "text": merged_text,
+        })
 
     return expanded_results

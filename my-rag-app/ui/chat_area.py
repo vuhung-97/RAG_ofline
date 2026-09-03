@@ -94,10 +94,6 @@ class ChatArea(QScrollArea):
                 self._streaming_bubble._format_text(full_text, font_size=fs)
             )
 
-            # Thêm sources DƯỚI label text (trong QVBoxLayout dọc), không phải QHBoxLayout ngang
-            if sources:
-                self._streaming_bubble.add_sources(sources)
-
             self._streaming_widget = None
             self._streaming_bubble = None
 

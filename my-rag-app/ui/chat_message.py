@@ -1,76 +1,11 @@
-"""Chat message bubble widget - compact, markdown-like, collapsible sources."""
+"""Chat message bubble widget - compact, markdown-like."""
 
 import re
 from PyQt6.QtWidgets import (
-    QFrame, QVBoxLayout, QHBoxLayout, QLabel, QWidget, QPushButton
+    QFrame, QVBoxLayout, QHBoxLayout, QLabel, QWidget
 )
 from PyQt6.QtCore import Qt, QDateTime
 from PyQt6.QtGui import QFont
-
-
-class CollapsibleSources(QWidget):
-    """Nguồn tham khảo có thể thu gọn/mở rộng bằng nút bấm."""
-
-    def __init__(self, sources, parent=None):
-        super().__init__(parent)
-        self._is_expanded = False
-        self._sources = sources
-
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(0, 4, 0, 0)
-        layout.setSpacing(0)
-
-        # Nút toggle
-        count = len(sources)
-        self._toggle_btn = QPushButton(f"▸ 📌 Nguồn tham khảo ({count})")
-        self._toggle_btn.setStyleSheet("""
-            QPushButton {
-                background: transparent;
-                border: none;
-                color: #475569;
-                font-size: 8pt;
-                font-weight: 600;
-                text-align: left;
-                padding: 4px 0;
-            }
-            QPushButton:hover {
-                color: #1e40af;
-            }
-        """)
-        self._toggle_btn.clicked.connect(self._toggle)
-        layout.addWidget(self._toggle_btn)
-
-        # Content container
-        self._content_widget = QWidget()
-        self._content_widget.setStyleSheet("background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 4px; padding: 4px;")
-        content_layout = QVBoxLayout(self._content_widget)
-        content_layout.setContentsMargins(8, 6, 8, 6)
-        content_layout.setSpacing(6)
-
-        for idx, src in enumerate(sources, 1):
-            fname = src.get("file_name", "Unknown")
-            snippet = src.get("text", "")
-            if len(snippet) > 150:
-                snippet = snippet[:150] + "..."
-
-            item_label = QLabel(f"[{idx}] {fname}")
-            item_label.setStyleSheet("font-weight: 600; font-size: 8pt; color: #475569; background: transparent; border: none;")
-            content_layout.addWidget(item_label)
-
-            snippet_label = QLabel(snippet)
-            snippet_label.setWordWrap(True)
-            snippet_label.setStyleSheet("font-size: 8pt; color: #64748b; padding-left: 16px; background: transparent; border: none;")
-            content_layout.addWidget(snippet_label)
-
-        self._content_widget.setVisible(False)
-        layout.addWidget(self._content_widget)
-
-    def _toggle(self):
-        self._is_expanded = not self._is_expanded
-        self._content_widget.setVisible(self._is_expanded)
-        arrow = "▾" if self._is_expanded else "▸"
-        count = len(self._sources)
-        self._toggle_btn.setText(f"{arrow} 📌 Nguồn tham khảo ({count})")
 
 
 class ChatMessageWidget(QFrame):
@@ -84,7 +19,6 @@ class ChatMessageWidget(QFrame):
         self._text_label = None
         self._content_widget = None
         self._content_layout = None
-        self._sources_added = False
         self._setup_ui()
 
     def _setup_ui(self):
@@ -102,7 +36,7 @@ class ChatMessageWidget(QFrame):
         icon_label.setAlignment(Qt.AlignmentFlag.AlignTop)
         icon_label.setStyleSheet("font-size: 16pt; background: transparent;")
 
-        # Content container - lưu thành instance để add_sources() dùng được
+        # Content container
         self._content_widget = QWidget()
         self._content_widget.setStyleSheet("background: transparent;")
         self._content_layout = QVBoxLayout(self._content_widget)
@@ -124,8 +58,6 @@ class ChatMessageWidget(QFrame):
         name_label.setFont(name_font)
         name_label.setStyleSheet(f"color: {'#1e40af' if is_user else '#047857'}; background: transparent; border: none;")
 
-        # User: time | name (bên phải)
-        # Assistant: name | time (bên trái)
         if is_user:
             header_layout.addStretch()
             header_layout.addWidget(time_label)
@@ -137,7 +69,7 @@ class ChatMessageWidget(QFrame):
 
         self._content_layout.addLayout(header_layout)
 
-        # Text content - QLabel compact, KHONG co font-size cứng
+        # Text content
         self._text_label = QLabel()
         self._text_label.setWordWrap(True)
         self._text_label.setTextFormat(Qt.TextFormat.RichText)
@@ -175,12 +107,6 @@ class ChatMessageWidget(QFrame):
                 self._text_label.setFont(app.font())
         except Exception:
             pass
-
-        # Sources - collapsible, chỉ cho assistant, nằm TRONG content (dưới text)
-        if self.sources and not is_user:
-            sources_widget = CollapsibleSources(self.sources)
-            self._content_layout.addWidget(sources_widget)
-            self._sources_added = True
 
         # Alignment: User = CẢ CỤM bên PHẢI, Assistant = CẢ CỤM bên TRÁI
         if is_user:
@@ -229,19 +155,6 @@ class ChatMessageWidget(QFrame):
         """Trả về QLabel để streaming append."""
         return self._text_label
 
-    def add_sources(self, sources):
-        """Thêm CollapsibleSources vào DƯỚI label text (trong QVBoxLayout dọc)."""
-        if not sources or self.role == "user":
-            return
-        if self._sources_added:
-            return
-        if self._content_layout is None:
-            return
-        sources_widget = CollapsibleSources(sources)
-        self._content_layout.addWidget(sources_widget)
-        self._sources_added = True
-        self.sources = sources
-
     def get_content_layout(self):
-        """Trả về layout dọc chứa header + text + sources."""
+        """Trả về layout dọc chứa header + text."""
         return self._content_layout

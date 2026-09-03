@@ -62,7 +62,6 @@ class ChatInput(QWidget):
             QTextEdit {
                 background-color: transparent;
                 border: none;
-                font-size: 10pt;
                 color: #1e293b;
                 padding: 4px;
             }
@@ -95,3 +94,18 @@ class ChatInput(QWidget):
     def get_text(self):
         """Lấy text hiện tại."""
         return self.text_edit.toPlainText().strip()
+
+    def update_font_size(self, font_size):
+        """Cập nhật font size cho input và send button."""
+        self.text_edit.setStyleSheet(f"""
+            QTextEdit {{
+                background-color: transparent;
+                border: none;
+                font-size: {font_size}pt;
+                color: #1e293b;
+                padding: 4px;
+            }}
+        """)
+        font = self.send_button.font()
+        font.setPointSize(font_size)
+        self.send_button.setFont(font)

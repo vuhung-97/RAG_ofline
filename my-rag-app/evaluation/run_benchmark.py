@@ -206,7 +206,7 @@ def run_benchmark(benchmark_path: str, document_path: str = None):
             "bm25_top_k": config.BM25_TOP_K,
             "final_top_k": config.FINAL_TOP_K,
             "rrf_k": config.RRF_K,
-            "max_context_chunks": config.MAX_CONTEXT_CHUNKS,
+            "max_context_chunks": f"dynamic (top_k * 2)",
             "max_context_tokens": config.MAX_CONTEXT_TOKENS,
         },
         "summary": {

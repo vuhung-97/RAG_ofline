@@ -4,7 +4,7 @@ import os
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QComboBox,
     QLineEdit, QGroupBox, QFormLayout, QFileDialog, QProgressBar,
-    QScrollArea, QFrame, QMessageBox, QSizePolicy
+    QScrollArea, QFrame, QMessageBox, QSizePolicy, QInputDialog
 )
 from PyQt6.QtCore import Qt, pyqtSignal, QTimer
 from PyQt6.QtGui import QFont
@@ -85,20 +85,10 @@ class Sidebar(QWidget):
         self.workspace_combo.currentTextChanged.connect(self._on_workspace_changed)
         scroll_layout.addWidget(self.workspace_combo)
 
-        # Create workspace group
-        create_group = QGroupBox("➕ Tạo Nhóm Tài Liệu Mới")
-        create_layout = QHBoxLayout()
-        self.new_ws_input = QLineEdit()
-        self.new_ws_input.setPlaceholderText("Tên nhóm mới...")
-        create_layout.addWidget(self.new_ws_input)
-
-        self.btn_create_ws = QPushButton("Tạo")
-        self.btn_create_ws.setFixedWidth(60)
-        self.btn_create_ws.clicked.connect(self._on_create_workspace)
-        create_layout.addWidget(self.btn_create_ws)
-
-        create_group.setLayout(create_layout)
-        scroll_layout.addWidget(create_group)
+        # Create workspace button
+        self.btn_add_workspace = QPushButton("➕ Thêm Nhóm Mới")
+        self.btn_add_workspace.clicked.connect(self._on_create_workspace)
+        scroll_layout.addWidget(self.btn_add_workspace)
 
         # File list
         self.file_list_label = QLabel("📄 File đã nạp:")
@@ -243,11 +233,21 @@ class Sidebar(QWidget):
             self.workspace_changed.emit(name)
 
     def _on_create_workspace(self):
-        """Tạo workspace mới."""
-        name = self.new_ws_input.text().strip()
-        if name:
+        """Tạo workspace mới qua dialog."""
+        name, ok = QInputDialog.getText(
+            self, "Tạo Nhóm Mới", "Nhập tên nhóm tài liệu:"
+        )
+        if ok and name.strip():
+            name = name.strip()
+            # Kiểm tra tên trùng
+            existing = self.vector_store.list_workspaces()
+            if name in existing:
+                QMessageBox.warning(
+                    self, "Tên đã tồn tại",
+                    f"Nhóm '{name}' đã có. Vui lòng chọn tên khác."
+                )
+                return
             self.vector_store.set_workspace(name)
-            self.new_ws_input.clear()
             self._refresh_workspaces()
             self._refresh_file_list()
             self.workspace_created.emit(name)
