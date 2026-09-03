@@ -1,0 +1,26 @@
+# Runtime data
+bm25_index/
+chroma_db/
+logs/
+
+# User settings
+app_settings.json
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# Virtual environment
+venv/
+.venv/
+
+# Temp files
+temp/
+
+# Environment
+.env
+
+# OS files
+.DS_Store
+Thumbs.db
