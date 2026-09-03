@@ -18,13 +18,9 @@ class Config:
     EMBED_DOC_PREFIX: str = "task: search result | document: "
     EMBED_DIMENSION: int = 768
 
-    # Chunking Configurations
+    # Chunking Configurations (MarkItDown + LangChain RecursiveCharacterTextSplitter)
     CHUNK_SIZE: int = 500
     CHUNK_OVERLAP: int = 150
-    TABLE_MAX: int = 800
-    CHUNK_TOKENS: int = 400
-    OVERLAP_TOKENS: int = 150
-    CHUNK_TOKENS_MAX: int = 500
 
     # UI Configurations
     FONT_SIZE: int = 10

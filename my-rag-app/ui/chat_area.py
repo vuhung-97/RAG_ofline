@@ -67,6 +67,20 @@ class ChatArea(QScrollArea):
             )
             self._scroll_to_bottom()
 
+    def replace_streaming_text(self, new_text):
+        """Replace toàn bộ nội dung streaming bubble (dùng khi guardrail fail)."""
+        if self._streaming_bubble:
+            self._streaming_bubble.text = new_text
+            try:
+                from PyQt6.QtWidgets import QApplication
+                fs = QApplication.instance().font().pointSize()
+            except Exception:
+                fs = None
+            self._streaming_bubble._text_label.setText(
+                self._streaming_bubble._format_text(new_text, font_size=fs)
+            )
+            self._scroll_to_bottom()
+
     def finalize_streaming(self, full_text, sources=None):
         """Hoàn thành streaming, set lại nội dung với formatting."""
         if self._streaming_bubble:

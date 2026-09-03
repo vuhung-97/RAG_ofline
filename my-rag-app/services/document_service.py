@@ -1,8 +1,7 @@
 import os
 import hashlib
 from typing import List, Dict, Any
-from loaders.factory import LoaderFactory
-from core.text_splitter import TextSplitterService
+from core.markitdown_loader import MarkItDownLoader
 from core.embedding_service import OllamaEmbeddingService
 from core.vector_store import ChromaVectorStore
 from core.bm25_index import BM25Index
@@ -14,14 +13,12 @@ class DocumentService:
 
     def __init__(
         self,
-        loader_factory: LoaderFactory,
-        splitter_service: TextSplitterService,
+        md_loader: MarkItDownLoader,
         embedding_service: OllamaEmbeddingService,
         vector_store: ChromaVectorStore,
         bm25_index: BM25Index = None
     ):
-        self.loader_factory = loader_factory
-        self.splitter_service = splitter_service
+        self.md_loader = md_loader
         self.embedding_service = embedding_service
         self.vector_store = vector_store
         self.bm25_index = bm25_index or BM25Index()
@@ -38,29 +35,12 @@ class DocumentService:
         if file_name in indexed_files:
             return {"status": "skipped", "message": f"File '{file_name}' đã có trong nhóm '{self.vector_store.current_workspace}'."}
 
-        # 1. Load văn bản
-        loader = self.loader_factory.get_loader(file_path)
+        # 1. Load + Chunk qua MarkItDown
         metadata = {"file_name": file_name, "file_path": file_path, "workspace": self.vector_store.current_workspace}
-        chunks = None
+        chunks = self.md_loader.load_and_chunk(file_path, metadata)
 
-        if hasattr(loader, "load_structured"):
-            try:
-                elements = loader.load_structured(file_path)
-                if elements:
-                    chunks = self.splitter_service.split_structured(elements, metadata)
-            except Exception:
-                chunks = None
-
-        if chunks is None:
-            raw_text = loader.load(file_path)
-            if not raw_text.strip():
-                return {"status": "warning", "message": f"File '{file_name}' không chứa nội dung văn bản."}
-            self.splitter_service.splitter._chunk_size = config.CHUNK_SIZE
-            self.splitter_service.splitter._chunk_overlap = config.CHUNK_OVERLAP
-            chunks = self.splitter_service.split_text(raw_text, metadata)
-        else:
-            if not chunks:
-                return {"status": "warning", "message": f"File '{file_name}' không chứa nội dung văn bản."}
+        if not chunks:
+            return {"status": "warning", "message": f"File '{file_name}' không chứa nội dung văn bản."}
 
         # 2. Gán chunk_id, prev_id, next_id
         chunk_ids = []

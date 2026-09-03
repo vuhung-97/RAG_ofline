@@ -106,6 +106,10 @@ class RAGService:
         if any(p in answer_lower for p in fallback_phrases):
             return answer
 
+        # Nếu answer có trích nguồn [1], [2]... → cho qua (đang dùng context)
+        if _re.search(r'\[\d+\]', answer):
+            return answer
+
         # No context → must reject
         if not context or context.strip() == "Không tìm thấy ngữ cảnh trong nhóm tài liệu hiện tại.":
             return "Tài liệu không đề cập đến thông tin này."

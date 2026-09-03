@@ -21,7 +21,7 @@ class CollapsibleSources(QWidget):
         layout.setSpacing(0)
 
         # Nút toggle
-        count = len(sources[:3])
+        count = len(sources)
         self._toggle_btn = QPushButton(f"▸ 📌 Nguồn tham khảo ({count})")
         self._toggle_btn.setStyleSheet("""
             QPushButton {
@@ -47,7 +47,7 @@ class CollapsibleSources(QWidget):
         content_layout.setContentsMargins(8, 6, 8, 6)
         content_layout.setSpacing(6)
 
-        for idx, src in enumerate(sources[:3], 1):
+        for idx, src in enumerate(sources, 1):
             fname = src.get("file_name", "Unknown")
             snippet = src.get("text", "")
             if len(snippet) > 150:
@@ -69,7 +69,7 @@ class CollapsibleSources(QWidget):
         self._is_expanded = not self._is_expanded
         self._content_widget.setVisible(self._is_expanded)
         arrow = "▾" if self._is_expanded else "▸"
-        count = len(self._sources[:3])
+        count = len(self._sources)
         self._toggle_btn.setText(f"{arrow} 📌 Nguồn tham khảo ({count})")
 
 

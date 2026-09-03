@@ -2,6 +2,7 @@
 
 import sys
 import os
+import re
 
 # Thêm root dir vào sys.path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -15,8 +16,7 @@ from time import time as _time_now
 from PyQt6.QtGui import QFont
 
 from config import config, get_installed_models
-from loaders.factory import LoaderFactory
-from core.text_splitter import TextSplitterService
+from core.markitdown_loader import MarkItDownLoader
 from core.embedding_service import OllamaEmbeddingService
 from core.vector_store import ChromaVectorStore
 from core.llm_service import OllamaLLMService
@@ -85,8 +85,7 @@ class MainWindow(QMainWindow):
 
     def _init_services(self):
         """Khởi tạo backend services."""
-        self.loader_factory = LoaderFactory()
-        self.splitter_service = TextSplitterService()
+        self.md_loader = MarkItDownLoader()
         self.embedding_service = OllamaEmbeddingService()
         self.vector_store = ChromaVectorStore()
         self.llm_service = OllamaLLMService()
@@ -97,8 +96,7 @@ class MainWindow(QMainWindow):
             self.bm25_index.load()
 
         self.document_service = DocumentService(
-            loader_factory=self.loader_factory,
-            splitter_service=self.splitter_service,
+            md_loader=self.md_loader,
             embedding_service=self.embedding_service,
             vector_store=self.vector_store,
             bm25_index=self.bm25_index
@@ -363,6 +361,7 @@ class MainWindow(QMainWindow):
         )
         self.stream_worker.token_received.connect(self._on_token_received)
         self.stream_worker.sources_ready.connect(self._on_sources_ready)
+        self.stream_worker.answer_replaced.connect(self._on_answer_replaced)
         self.stream_worker.finished.connect(self._on_stream_finished)
         self.stream_worker.error.connect(self._on_stream_error)
         self.stream_worker.start()
@@ -380,6 +379,13 @@ class MainWindow(QMainWindow):
         """Lưu sources để dùng khi finish."""
         self._current_sources = sources
 
+    def _on_answer_replaced(self, new_text):
+        """Guardrail fail → replace toàn bộ answer bằng thông báo."""
+        if self.chat_area._streaming_bubble:
+            self.chat_area.replace_streaming_text(new_text)
+            # Cập nhật full_text trong bubble
+            self.chat_area._streaming_bubble.text = new_text
+
     def _on_stream_finished(self):
         """Khi stream xong."""
         # Nếu chưa có bubble (trường hợp không có token nào) thì ẩn typing và tạo bubble rỗng
@@ -395,6 +401,12 @@ class MainWindow(QMainWindow):
             full_text = ""
 
         sources = getattr(self, '_current_sources', [])
+
+        # Filter sources: chỉ giữ nguồn được citation trong answer [1], [2]...
+        if full_text and sources:
+            cited = set(map(int, re.findall(r'\[(\d+)\]', full_text)))
+            if cited:
+                sources = [s for i, s in enumerate(sources, 1) if i in cited]
 
         # Finalize streaming
         self.chat_area.finalize_streaming(full_text, sources)

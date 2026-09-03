@@ -57,6 +57,7 @@ class StreamWorker(QThread):
 
     token_received = pyqtSignal(str)
     sources_ready = pyqtSignal(list)
+    answer_replaced = pyqtSignal(str)  # emit khi guardrail replace answer
     finished = pyqtSignal()
     error = pyqtSignal(str)
 
@@ -102,8 +103,8 @@ class StreamWorker(QThread):
                 context_text = "\n".join([s.get("text", "") for s in result.get("sources", [])])
                 validated = self.rag_service._validate_answer(full_response, context_text)
                 if validated != full_response:
-                    self.token_received.emit("\n\n⚠️ [Guardrail] ")
-                    self.token_received.emit(validated)
+                    # Guardrail fail → replace toàn bộ answer
+                    self.answer_replaced.emit(validated)
 
         except Exception as e:
             self.error.emit(str(e))

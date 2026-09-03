@@ -11,8 +11,7 @@ sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from config import config
-from loaders.factory import LoaderFactory
-from core.text_splitter import TextSplitterService
+from core.markitdown_loader import MarkItDownLoader
 from core.embedding_service import OllamaEmbeddingService
 from core.vector_store import ChromaVectorStore
 from core.llm_service import OllamaLLMService
@@ -105,8 +104,7 @@ def run_benchmark(benchmark_path: str, document_path: str = None):
 
     # Initialize services
     print("Initializing services...")
-    loader_factory = LoaderFactory()
-    splitter_service = TextSplitterService()
+    md_loader = MarkItDownLoader()
     embedding_service = OllamaEmbeddingService()
     vector_store = ChromaVectorStore()
     llm_service = OllamaLLMService()
@@ -117,8 +115,7 @@ def run_benchmark(benchmark_path: str, document_path: str = None):
         bm25_index.load()
 
     doc_service = DocumentService(
-        loader_factory=loader_factory,
-        splitter_service=splitter_service,
+        md_loader=md_loader,
         embedding_service=embedding_service,
         vector_store=vector_store,
         bm25_index=bm25_index
