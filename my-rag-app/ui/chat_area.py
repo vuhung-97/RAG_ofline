@@ -1,6 +1,7 @@
 """Chat area scrollable chứa các tin nhắn - compact streaming."""
 
 import re
+import time
 from PyQt6.QtWidgets import (
     QScrollArea, QWidget, QVBoxLayout, QLabel, QFrame
 )
@@ -18,6 +19,8 @@ class ChatArea(QScrollArea):
         self._streaming_widget = None
         self._streaming_bubble = None
         self._typing_indicator = None
+        self._timer = None
+        self._timer_start_ms = 0
 
     def _setup_ui(self):
         self.setWidgetResizable(True)
@@ -47,8 +50,25 @@ class ChatArea(QScrollArea):
         self.layout.insertWidget(self.layout.count() - 1, bubble)
         self._streaming_bubble = bubble
         self._streaming_widget = bubble.get_text_label()
+        # Start timer
+        self._timer_start_ms = time.time()
+        self._timer = QTimer()
+        self._timer.timeout.connect(self._update_streaming_timer)
+        self._timer.start(100)
         QTimer.singleShot(50, self._scroll_to_bottom)
         return bubble
+
+    def _update_streaming_timer(self):
+        """Cập nhật timer realtime khi streaming."""
+        if self._streaming_bubble and self._timer_start_ms:
+            elapsed = time.time() - self._timer_start_ms
+            self._streaming_bubble.update_timer(elapsed)
+
+    def _stop_timer(self):
+        """Dừng timer."""
+        if self._timer:
+            self._timer.stop()
+            self._timer = None
 
     def append_streaming_token(self, token):
         """Append token vào streaming widget."""
@@ -70,6 +90,7 @@ class ChatArea(QScrollArea):
     def replace_streaming_text(self, new_text):
         """Replace toàn bộ nội dung streaming bubble (dùng khi guardrail fail)."""
         if self._streaming_bubble:
+            self._stop_timer()
             self._streaming_bubble.text = new_text
             try:
                 from PyQt6.QtWidgets import QApplication
@@ -84,6 +105,7 @@ class ChatArea(QScrollArea):
     def finalize_streaming(self, full_text, sources=None):
         """Hoàn thành streaming, set lại nội dung với formatting."""
         if self._streaming_bubble:
+            self._stop_timer()
             self._streaming_bubble.text = full_text
             try:
                 from PyQt6.QtWidgets import QApplication
@@ -96,6 +118,15 @@ class ChatArea(QScrollArea):
 
             self._streaming_widget = None
             self._streaming_bubble = None
+
+    def stop_streaming(self):
+        """Dừng stream, xóa bubble đang dở (không finalize)."""
+        self._stop_timer()
+        if self._streaming_bubble:
+            self.layout.removeWidget(self._streaming_bubble)
+            self._streaming_bubble.deleteLater()
+        self._streaming_widget = None
+        self._streaming_bubble = None
 
     def show_typing(self):
         """Hiện 3 chấm nhảy khi chờ token đầu."""
@@ -132,6 +163,7 @@ class ChatArea(QScrollArea):
                 widget.deleteLater()
         self._streaming_widget = None
         self._streaming_bubble = None
+        self._stop_timer()
 
     def _scroll_to_bottom(self):
         """Scroll xuống cuối cùng."""

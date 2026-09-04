@@ -82,6 +82,7 @@ class Sidebar(QWidget):
 
         # Workspace selector
         self.workspace_combo = QComboBox()
+        self.workspace_combo.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         self.workspace_combo.currentTextChanged.connect(self._on_workspace_changed)
         scroll_layout.addWidget(self.workspace_combo)
 

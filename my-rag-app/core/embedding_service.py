@@ -1,6 +1,15 @@
+import re
 from typing import List
 import requests
 from config import config
+
+
+def preprocess_query_text(text: str) -> str:
+    """Trích nội dung trong "" nếu có, nếu không lấy toàn bộ để tránh loãng vector."""
+    matches = re.findall(r'"([^"]+)"', text)
+    if matches:
+        return " ".join(matches).strip()
+    return text.strip()
 
 
 class OllamaEmbeddingService:
@@ -15,7 +24,10 @@ class OllamaEmbeddingService:
 
     def embed_query(self, text: str, model_name: str = config.EMBED_MODEL) -> List[float]:
         """Embed query với task prefix để phân biệt asymmetric encoding."""
-        prefixed = self.query_prefix + text
+        cleaned_text = preprocess_query_text(text)
+        if not cleaned_text:
+            cleaned_text = text.strip()
+        prefixed = self.query_prefix + cleaned_text
         return self._embed_single(prefixed, model_name)
 
     def embed_documents(self, texts: List[str], model_name: str = config.EMBED_MODEL,

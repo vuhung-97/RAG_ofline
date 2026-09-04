@@ -1,4 +1,4 @@
-"""Chat input area với QTextEdit + Send button."""
+"""Chat input area với QTextEdit + Send/Stop button."""
 
 from PyQt6.QtWidgets import (
     QWidget, QHBoxLayout, QVBoxLayout, QTextEdit, QPushButton, QLabel, QFrame
@@ -30,9 +30,11 @@ class ChatInput(QWidget):
     """Input area cố định ở dưới cùng chat area."""
 
     message_submitted = pyqtSignal(str)
+    stop_pressed = pyqtSignal()
 
     def __init__(self, parent=None):
         super().__init__(parent)
+        self._is_stop_mode = False
         self._setup_ui()
 
     def _setup_ui(self):
@@ -69,7 +71,7 @@ class ChatInput(QWidget):
         self.text_edit.submit_pressed.connect(self._on_submit)
         layout.addWidget(self.text_edit)
 
-        # Send button
+        # Send/Stop button
         self.send_button = QPushButton("Gửi")
         self.send_button.setObjectName("send_button")
         self.send_button.setFixedSize(QSize(60, 36))
@@ -79,15 +81,48 @@ class ChatInput(QWidget):
         main_layout.addWidget(container)
 
     def _on_submit(self):
+        if self._is_stop_mode:
+            self.stop_pressed.emit()
+            return
         text = self.text_edit.toPlainText().strip()
         if text:
             self.message_submitted.emit(text)
             self.text_edit.clear()
 
+    def set_stop_mode(self):
+        """Chuyển sang chế độ Dừng (đang stream)."""
+        self._is_stop_mode = True
+        self.send_button.setText("Dừng")
+        self.send_button.setStyleSheet("""
+            QPushButton {
+                background-color: #ef4444;
+                color: white;
+                border: none;
+                border-radius: 6px;
+                padding: 8px 16px;
+                font-weight: 600;
+                font-size: 9pt;
+            }
+            QPushButton:hover {
+                background-color: #dc2626;
+            }
+        """)
+
+    def set_send_mode(self):
+        """Quay lại chế độ Gửi."""
+        self._is_stop_mode = False
+        self.send_button.setText("Gửi")
+        self.send_button.setStyleSheet("")
+        self.send_button.setObjectName("send_button")
+        # Re-apply send_button style from stylesheet
+        self.send_button.style().unpolish(self.send_button)
+        self.send_button.style().polish(self.send_button)
+
     def set_enabled(self, enabled):
         """Bật/tắt input."""
         self.text_edit.setReadOnly(not enabled)
-        self.send_button.setEnabled(enabled)
+        if not self._is_stop_mode:
+            self.send_button.setEnabled(enabled)
         if enabled:
             self.text_edit.setFocus()
 

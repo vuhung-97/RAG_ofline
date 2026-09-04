@@ -12,89 +12,114 @@ from config import config
 
 import re as _re
 
-SYSTEM_PROMPT = """Bạn là trợ lý tra cứu tài liệu. Trả lời câu hỏi dựa trên ngữ cảnh bên dưới.
+CITATION_FOOTER = """
 
-QUY TẮC:
-1. CHỈ dùng thông tin có trong Context.
-2. KHÔNG thêm kiến thức ngoài Context.
-3. Nếu Context KHÔNG có thông tin → trả lời ngay: "Tài liệu không đề cập đến thông tin này."
-4. Mỗi câu trả lời PHẢI có trích nguồn [1][2] ngay sau câu tương ứng.
-5. Chỉ được trích nguồn trong khoảng [1]-[{num_chunks}].
-6. Trả lời ngắn gọn, rõ ràng.
-7. Kết thúc mỗi câu trả lời PHẢI có đoạn "Trích nguồn:" liệt kê TẤT CẢ nguồn đã dùng, mỗi nguồn 1 dòng theo format:
-   [idx] (Tài liệu: {{file_name}} | Chương: {{chapter}} | Mục: {{heading}}) "nội dung ngắn khoảng 20 ký tự..."
+Trích nguồn:
+{citations}"""
 
-VÍ DỤ:
+SYSTEM_PROMPT = """Bạn là trợ lý tra cứu tài liệu. Trả lời câu hỏi dựa trên ngữ cảnh.
+
+NGUYÊN TẮC TUYỆT ĐỐI:
+- CHỈ dùng thông tin CÓ TRONG Context bên dưới.
+- KHÔNG bịa đặt, KHÔNG thêm kiến thức ngoài Context.
+- Nếu Context KHÔNG có thông tin → trả lời NGAY: "Tài liệu không đề cập đến thông tin này."
+- Chỉ được trích nguồn trong khoảng [1]-[{num_chunks}].
+
+CẤU TRÚC CÂU TRẢ LỜI:
+- Mỗi ý chính xuống dòng mới.
+- Dùng bullet (-) hoặc numbered list (1. 2. 3.).
+- Mỗi thông tin PHẢI có trích nguồn [1][2] ngay sau.
+- Trích nguồn CUỐI cùng, tách riêng khỏi câu trả lời bởi 2 dòng trống.
+
+ĐỊNH DẠNG TRÍCH NGUỒN:
+Kết thúc mỗi câu trả lời PHẢI có đoạn:
+Trích nguồn:
+[1] (Tài liệu: {{file_name}} | Chương: {{chapter}} | Mục: {{heading}}) "mô tả nội dung ngắn..."
+
+VÍ DỤ CÂU TRẢ LỜI:
 Bảng NGUOIDUNG có các thuộc tính sau:
 1. id_nguoidung - Mã người dùng (C(6), Số nguyên) [1]
 2. tennguoidung - Tên người dùng (C(50), Chữ cái) [1]
+3. matkhau - Mật khẩu (C(50), Chữ cái) [1]
 
+Bộ phận tham gia:
+- Bộ phận bán hàng (BP02) [2]
+- Bộ phận tài chính (BP03) [2]
+{footer}
+
+Ngữ cảnh:
+{context}"""
+
+SUMMARY_PROMPT = """Bạn là trợ lý tóm tắt tài liệu. Tóm tắt dựa trên ngữ cảnh.
+
+NGUYÊN TẮC TUYỆT ĐỐI:
+- CHỈ tóm tắt nội dung CÓ TRONG Context bên dưới.
+- KHÔNG bịa đặt, KHÔNG thêm thông tin ngoài Context.
+- Tóm tắt 100-300 từ, có cấu trúc bullet points.
+- Mỗi bullet PHẢI trích nguồn [1][2]. Chỉ dùng [1]-[{num_chunks}].
+- Nếu Context KHÔNG có thông tin → ghi: "Phần này không có trong tài liệu."
+
+CẤU TRÚC CÂU TRẢ LỜI:
+- Mỗi ý chính dùng bullet (-).
+- Mỗi bullet trích nguồn [1][2] ở cuối dòng.
+- Xuống dòng rõ ràng, dễ đọc.
+- Trích nguồn CUỐI cùng, tách riêng khỏi câu trả lời bởi 2 dòng trống.
+
+ĐỊNH DẠNG TRÍCH NGUỒN:
+Kết thúc mỗi câu trả lời PHẢI có đoạn:
 Trích nguồn:
-[1] (Tài liệu: example.docx | Chương: CHƯƠNG III. THIẾT KẾ HỆ THỐNG | Mục: 3.3. Thiết kế cơ sở dữ liệu) "Bảng NGUOIDUNG có các thuộc tính..."
+[1] (Tài liệu: {{file_name}} | Chương: {{chapter}} | Mục: {{heading}}) "mô tả nội dung ngắn..."
+
+VÍ DỤ CÂU TRẢ LỜI:
+Quy trình QT02 là quy trình bán hàng cho khách hàng [1]:
+- Quy trình bao gồm 3 bước chính [1]
+- Bước 1: Tiếp nhận hàng hóa từ kho [2]
+- Bước 2: Giao hàng cho khách hàng [2]
+- Bước 3: Lập hóa đơn bán hàng [2]
+{footer}
 
 Ngữ cảnh:
-{context}
-"""
-
-YESNO_PROMPT = """Bạn là trợ lý tra cứu tài liệu. Trả lời CÓ/KHÔNG dựa trên ngữ cảnh.
-
-QUY TẮC:
-1. Context CÓ thông tin → trả lời "Có" + giải thích ngắn + trích dẫn [1][2].
-2. Context KHÔNG có → trả lời: "Không, trong tài liệu không có nội dung về [chủ đề]."
-3. Chỉ được trích nguồn trong khoảng [1]-[{num_chunks}].
-4. KHÔNG bịa đặt.
-5. Kết thúc mỗi câu trả lời PHẢI có đoạn "Trích nguồn:" liệt kê TẤT CẢ nguồn đã dùng, mỗi nguồn 1 dòng theo format:
-   [idx] (Tài liệu: {{file_name}} | Chương: {{chapter}} | Mục: {{heading}}) "nội dung ngắn khoảng 20 ký tự..."
-
-Ngữ cảnh:
-{context}
-"""
-
-SUMMARY_PROMPT = """Bạn là trợ lý tóm tắt tài liệu. Tóm tắt nội dung dựa trên ngữ cảnh bên dưới.
-
-QUY TẮC:
-1. CHỈ tóm tắt nội dung có trong Context.
-2. KHÔNG thêm thông tin ngoài Context.
-3. Tóm tắt 100-300 từ, có cấu trúc bullet.
-4. Mỗi bullet PHẢI trích nguồn [1][2].
-5. Chỉ được trích nguồn trong khoảng [1]-[{num_chunks}].
-6. Nếu Context KHÔNG có thông tin → ghi: "Phần này không có trong tài liệu."
-7. Kết thúc mỗi câu trả lời PHẢI có đoạn "Trích nguồn:" liệt kê TẤT CẢ nguồn đã dùng, mỗi nguồn 1 dòng theo format:
-   [idx] (Tài liệu: {{file_name}} | Chương: {{chapter}} | Mục: {{heading}}) "nội dung ngắn khoảng 20 ký tự..."
-
-Ngữ cảnh:
-{context}
-"""
+{context}"""
 
 EXTRACT_PROMPT = """Bạn là trợ lý trích xuất nguyên văn. Copy NGUYÊN VĂN từ ngữ cảnh.
 
-QUY TẮC:
-1. CHỈ copy những gì CÓ TRONG Context.
-2. Giữ nguyên định dạng (bảng, xuống dòng).
-3. Mỗi dòng PHẢI có trích nguồn [idx] ở cuối.
-4. Chỉ được trích nguồn trong khoảng [1]-[{num_chunks}].
-5. KHÔNG tạo nội dung mới.
-6. Nếu Context KHÔNG có → nói: "Tài liệu không đề cập đến thông tin này."
-7. Kết thúc mỗi câu trả lời PHẢI có đoạn "Trích nguồn:" liệt kê TẤT CẢ nguồn đã dùng, mỗi nguồn 1 dòng theo format:
-   [idx] (Tài liệu: {{file_name}} | Chương: {{chapter}} | Mục: {{heading}}) "nội dung ngắn khoảng 20 ký tự..."
+NGUYÊN TẮC TUYỆT ĐỐI:
+- CHỈ copy những gì CÓ TRONG Context bên dưới.
+- KHÔNG tạo nội dung mới, KHÔNG diễn giải.
+- Giữ nguyên định dạng (bảng, xuống dòng, bullet).
+- Trích nguồn [idx] ở cuối mỗi dòng/thông tin. Chỉ dùng [1]-[{num_chunks}].
+- Nếu Context KHÔNG có → nói: "Tài liệu không đề cập đến thông tin này."
+- Trích nguồn CUỐI cùng, tách riêng khỏi nội dung trích bởi 2 dòng trống.
+
+ĐỊNH DẠNG TRÍCH NGUỒN:
+Kết thúc mỗi câu trả lời PHẢI có đoạn:
+Trích nguồn:
+[1] (Tài liệu: {{file_name}} | Chương: {{chapter}} | Mục: {{heading}}) "mô tả nội dung ngắn..."
+
+VÍ DỤ CÂU TRẢ LỜI:
+id_nguoidung | tennguoidung | matkhau [1]
+001 | Nguyễn Văn A | ***** [1]
+002 | Trần Văn B | ***** [1]
+{footer}
 
 Ngữ cảnh:
-{context}
-"""
+{context}"""
 
-LOCATE_PROMPT = """Bạn là trợ lý định vị tài liệu. Chỉ trả VỊ TRÍ nội dung.
 
-QUY TẮC:
-1. Format: [idx] Tài liệu: {{file_name}} | Chương: {{chapter}} | Mục: {{heading}}) "nội dung ngắn khoảng 20 ký tự..."
-2. CHỈ liệt kê vị trí CÓ nội dung trong Context.
-3. Chỉ được trích nguồn trong khoảng [1]-[{num_chunks}].
-4. Nếu KHÔNG có → báo: "Không tìm thấy vị trí phù hợp."
-5. Kết thúc mỗi câu trả lời PHẢI có đoạn "Trích nguồn:" liệt kê TẤT CẢ nguồn đã dùng, mỗi nguồn 1 dòng theo format:
-   [idx] (Tài liệu: {{file_name}} | Chương: {{chapter}} | Mục: {{heading}}) "nội dung ngắn khoảng 20 ký tự..."
+def _format_prompt(template: str, context: str, num_chunks: int) -> str:
+    """Format prompt template bằng cách chèn CITATION_FOOTER vào {footer}."""
+    footer = CITATION_FOOTER.format(citations="")
+    return template.format(context=context, num_chunks=num_chunks, footer=footer)
 
-Ngữ cảnh:
-{context}
-"""
+
+def _postprocess_response(text: str) -> str:
+    """Đảm bảo phần Trích nguồn không bị lặp và tách biệt khỏi câu trả lời."""
+    parts = text.split("Trích nguồn:")
+    if len(parts) > 2:
+        answer = parts[0].rstrip()
+        citations = "Trích nguồn:" + parts[-1]
+        text = f"{answer}\n\n{citations}"
+    return text
 
 
 class RAGService:
@@ -169,19 +194,12 @@ class RAGService:
         q_low = user_query.strip().lower()
         intent = {
             "is_extract": False,
-            "is_locate": False,
             "is_summary": False,
-            "is_yesno": False,
             "chapter_match": None,
         }
 
-        if _re.search(r"(làm gì có|có (không|không\?|ở đâu)|liệu có|thật sự có|ở trong|trong.*có )", q_low):
-            intent["is_yesno"] = True
-
         if q_low.startswith(("/trich", "/extract")):
             intent["is_extract"] = True
-        elif q_low.startswith(("/vitri", "/where", "/odau")):
-            intent["is_locate"] = True
         elif q_low.startswith(("/tomtat", "/tonghop")):
             intent["is_summary"] = True
             m = _re.search(r"chương\s*(\d+)|chuong\s*(\d+)", user_query, _re.I)
@@ -190,8 +208,6 @@ class RAGService:
         else:
             if _re.search(r"trích.*nguyên văn|nguyên văn|trích.*đoạn|bảng\s*\d+|extract|verbatim", user_query, _re.I):
                 intent["is_extract"] = True
-            elif _re.search(r"ở (tài liệu|chương|mục) nào|thuộc.*chương|nằm ở.*mục", user_query, _re.I):
-                intent["is_locate"] = True
             elif _re.search(r"tóm tắt|tom tat|tổng hợp|tong hop", user_query, _re.I):
                 m = _re.search(r"chương\s*(\d+)|chuong\s*(\d+)|mục\s*([\d\.]+)|muc\s*([\d\.]+)", user_query, _re.I)
                 if m:
@@ -353,16 +369,12 @@ class RAGService:
         # 10. Select prompt
         if intent["is_extract"]:
             prompt_template = EXTRACT_PROMPT
-        elif intent["is_locate"]:
-            prompt_template = LOCATE_PROMPT
         elif intent["is_summary"]:
             prompt_template = SUMMARY_PROMPT
-        elif intent["is_yesno"]:
-            prompt_template = YESNO_PROMPT
         else:
             prompt_template = SYSTEM_PROMPT
 
-        system_content = prompt_template.format(context=formatted_context, num_chunks=num_chunks)
+        system_content = _format_prompt(prompt_template, formatted_context, num_chunks)
 
         # 11. Build messages
         messages = [{"role": "system", "content": system_content}]
@@ -388,9 +400,7 @@ class RAGService:
     @staticmethod
     def _get_no_result_message(intent: Dict[str, Any]) -> str:
         """Trả về message phù hợp khi không tìm thấy kết quả."""
-        if intent.get("is_locate"):
-            return "Không tìm thấy vị trí phù hợp trong tài liệu được cung cấp."
-        elif intent.get("is_extract"):
+        if intent.get("is_extract"):
             return "Không tìm thấy nội dung phù hợp trong tài liệu được cung cấp."
         else:
             return "Không tìm thấy thông tin phù hợp trong tài liệu được cung cấp."

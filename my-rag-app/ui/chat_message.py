@@ -17,6 +17,7 @@ class ChatMessageWidget(QFrame):
         self.text = text
         self.sources = sources or []
         self._text_label = None
+        self._timer_label = None
         self._content_widget = None
         self._content_layout = None
         self._setup_ui()
@@ -43,7 +44,7 @@ class ChatMessageWidget(QFrame):
         self._content_layout.setContentsMargins(0, 0, 0, 0)
         self._content_layout.setSpacing(2)
 
-        # Header: Tên + timestamp
+        # Header: Tên + timestamp + timer (chỉ assistant)
         header_layout = QHBoxLayout()
         header_layout.setSpacing(8)
 
@@ -65,6 +66,10 @@ class ChatMessageWidget(QFrame):
         else:
             header_layout.addWidget(name_label)
             header_layout.addWidget(time_label)
+            # Timer label (chỉ assistant)
+            self._timer_label = QLabel("")
+            self._timer_label.setStyleSheet("color: #94a3b8; font-size: 8pt; background: transparent; border: none;")
+            header_layout.addWidget(self._timer_label)
             header_layout.addStretch()
 
         self._content_layout.addLayout(header_layout)
@@ -150,6 +155,16 @@ class ChatMessageWidget(QFrame):
         self.text = text
         if self._text_label:
             self._text_label.setText(self._format_text(text, font_size=font_size))
+
+    def update_timer(self, elapsed_seconds):
+        """Cập nhật timer label với thời gian đã trôi qua."""
+        if self._timer_label:
+            if elapsed_seconds < 60:
+                self._timer_label.setText(f"⏱ {elapsed_seconds:.1f}s")
+            else:
+                minutes = int(elapsed_seconds // 60)
+                secs = elapsed_seconds % 60
+                self._timer_label.setText(f"⏱ {minutes}m {secs:.0f}s")
 
     def get_text_label(self):
         """Trả về QLabel để streaming append."""

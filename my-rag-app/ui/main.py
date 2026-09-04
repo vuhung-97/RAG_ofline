@@ -165,6 +165,7 @@ class MainWindow(QMainWindow):
         self.sidebar.files_uploaded.connect(self._on_files_uploaded)
         self.sidebar.settings_clicked.connect(self._on_settings_clicked)
         self.chat_input.message_submitted.connect(self._on_message_submitted)
+        self.chat_input.stop_pressed.connect(self._on_stop_stream)
 
         # Welcome message
         self.chat_area.add_message(
@@ -341,8 +342,8 @@ class MainWindow(QMainWindow):
         self.chat_area.add_message("user", text)
         self.messages.append({"role": "user", "content": text})
 
-        # Disable input
-        self.chat_input.set_enabled(False)
+        # Chuyển nút sang chế độ Dừng (input vẫn enabled)
+        self.chat_input.set_stop_mode()
         self.statusBar().showMessage("Đang tìm kiếm & suy luận...")
 
         # Hiện 3 chấm nhảy khi chờ token đầu (không tạo bubble trống ngay)
@@ -383,6 +384,29 @@ class MainWindow(QMainWindow):
             # Cập nhật full_text trong bubble
             self.chat_area._streaming_bubble.text = new_text
 
+    def _on_stop_stream(self):
+        """Dừng stream hiện tại."""
+        if self.stream_worker and self.stream_worker.isRunning():
+            self.stream_worker.cancel()
+            self.stream_worker.wait(2000)
+
+        # Ẩn typing
+        if self.chat_area.is_typing_shown():
+            self.chat_area.hide_typing()
+
+        # Xóa bubble đang stream (nếu có)
+        if self.chat_area._streaming_bubble:
+            self.chat_area.stop_streaming()
+
+        # Quay lại nút Gửi
+        self.chat_input.set_send_mode()
+
+        # Xóa câu hỏi vừa dừng khỏi messages
+        if self.messages and self.messages[-1]["role"] == "user":
+            self.messages.pop()
+
+        self.statusBar().showMessage("Đã dừng")
+
     def _on_stream_finished(self):
         """Khi stream xong."""
         # Nếu chưa có bubble (trường hợp không có token nào) thì ẩn typing và tạo bubble rỗng
@@ -406,8 +430,8 @@ class MainWindow(QMainWindow):
             "content": full_text,
         })
 
-        # Enable input
-        self.chat_input.set_enabled(True)
+        # Quay lại nút Gửi
+        self.chat_input.set_send_mode()
         self.statusBar().showMessage("Sẵn sàng")
 
         # Ghi log câu hỏi & câu trả lời
@@ -439,7 +463,7 @@ class MainWindow(QMainWindow):
             if not self.chat_area._streaming_bubble:
                 self.chat_area.create_streaming_message()
         self.chat_area.finalize_streaming(f"❌ Lỗi: {error_msg}")
-        self.chat_input.set_enabled(True)
+        self.chat_input.set_send_mode()
         self.statusBar().showMessage(f"❌ Lỗi: {error_msg}")
 
         # Ghi log lỗi
