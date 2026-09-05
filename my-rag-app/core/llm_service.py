@@ -1,6 +1,7 @@
 from typing import List, Dict, Any, Generator
 import json
 import re
+import time
 import requests
 from config import config
 
@@ -20,6 +21,7 @@ class OllamaLLMService:
         enable_thinking: bool = config.ENABLE_THINKING
     ) -> Generator[str, None, None]:
         """Gửi prompt tới LLM và stream câu trả lời từng từ một."""
+        t_request_start = time.perf_counter()
         payload = {
             "model": model_name,
             "messages": messages,
@@ -36,37 +38,47 @@ class OllamaLLMService:
             response = requests.post(self.api_url, json=payload, stream=True, timeout=120)
             response.raise_for_status()
 
-            # Buffer để lọc <think> nếu server vẫn trả tag khi tắt thinking
             thinking_buffer = ""
             in_think = False
+            first_token_received = False
+
             for line in response.iter_lines():
                 if line:
                     chunk = json.loads(line.decode("utf-8"))
-                    # Ollama có thể trả field 'thinking' riêng
                     if not enable_thinking and "message" in chunk and chunk["message"].get("thinking"):
                         continue
                     if "message" in chunk and "content" in chunk["message"]:
                         content = chunk["message"]["content"]
                         if not enable_thinking and content:
-                            # Lọc streaming <think>...</think> nếu còn sót
-                            # đơn giản: nếu chứa tag thì buffer và strip
                             if "<think>" in content or in_think:
                                 thinking_buffer += content
                                 if "</think>" in thinking_buffer:
-                                    # loại bỏ toàn bộ block think
                                     thinking_buffer = re.sub(r"<think>.*?</think>", "", thinking_buffer, flags=re.DOTALL)
                                     if thinking_buffer:
+                                        if not first_token_received:
+                                            ttft = (time.perf_counter() - t_request_start) * 1000
+                                            print(f"[LLM STREAM] ⚡ Token đầu tiên xuất hiện (TTFT): {ttft:.1f} ms")
+                                            first_token_received = True
                                         yield thinking_buffer
                                     thinking_buffer = ""
                                     in_think = False
                                 else:
                                     in_think = True
                                 continue
-                            # strip stray tags
                             content = re.sub(r"<think>.*?</think>", "", content, flags=re.DOTALL)
                             content = content.replace("<think>", "").replace("</think>", "")
                             if not content:
                                 continue
+
+                        if not first_token_received and content:
+                            ttft = (time.perf_counter() - t_request_start) * 1000
+                            print(f"[LLM STREAM] ⚡ Token đầu tiên xuất hiện (TTFT): {ttft:.1f} ms")
+                            first_token_received = True
+
                         yield content
+
+            t_gen = (time.perf_counter() - t_request_start) * 1000
+            print(f"[LLM STREAM] ✅ Sinh xong câu trả lời! [Thời gian sinh LLM: {t_gen:.1f} ms]")
+
         except requests.exceptions.RequestException as e:
             yield f"\n[Lỗi kết nối Ollama LLM ({model_name}): {str(e)}]"

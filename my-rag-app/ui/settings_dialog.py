@@ -152,17 +152,22 @@ class SettingsDialog(QDialog):
         return 1 << math.ceil(math.log2(n))
 
     def _on_top_k_changed(self, value: int):
-        """Tự động tính num_ctx dựa trên top_k (power of 2)."""
-        required = OVERHEAD_TOKENS + (value * MAX_CHUNK_TOKENS * 2)  # ×2 cho table merge
-        num_ctx = self._next_power_of_2(required)
-        num_ctx = max(2048, min(32768, num_ctx))
+        """Tự động đặt num_ctx dựa trên mốc top_k (1-4 -> 4K, 5-8 -> 8K, 9-10 -> 16K)."""
+        if 1 <= value <= 4:
+            num_ctx = 4096
+        elif 5 <= value <= 8:
+            num_ctx = 8192
+        elif 9 <= value <= 10:
+            num_ctx = 16384
+        else:
+            num_ctx = 4096
 
         self.num_ctx_slider.blockSignals(True)
         self.num_ctx_slider.setValue(num_ctx)
         self.num_ctx_label.setText(str(num_ctx))
         self.num_ctx_slider.blockSignals(False)
 
-        self.info_label.setText(f"Tự động: {num_ctx} token (cho {value} chunks × {MAX_CHUNK_TOKENS})")
+        self.info_label.setText(f"Tự động: {num_ctx} token (cho {value} chunks)")
 
     def _load_current_values(self):
         """Load giá trị hiện tại vào form."""

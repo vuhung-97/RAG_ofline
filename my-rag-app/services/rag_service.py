@@ -1,3 +1,4 @@
+import time
 from typing import List, Dict, Any, Generator
 from core.embedding_service import OllamaEmbeddingService
 from core.vector_store import ChromaVectorStore
@@ -12,40 +13,22 @@ from config import config
 
 import re as _re
 
-CITATION_FOOTER = """
-
-Trích nguồn:
-{citations}"""
-
 SYSTEM_PROMPT = """Bạn là trợ lý tra cứu tài liệu. Trả lời câu hỏi dựa trên ngữ cảnh.
 
 NGUYÊN TẮC TUYỆT ĐỐI:
 - CHỈ dùng thông tin CÓ TRONG Context bên dưới.
 - KHÔNG bịa đặt, KHÔNG thêm kiến thức ngoài Context.
 - Nếu Context KHÔNG có thông tin → trả lời NGAY: "Tài liệu không đề cập đến thông tin này."
-- Chỉ được trích nguồn trong khoảng [1]-[{num_chunks}].
+- Mỗi dòng phải có một nhãn nguồn [1], [2]; nhãn nguồn chỉ đặt ở cuối dòng; chỉ dùng nhãn từ [1] đến [{num_chunks}].
+- Nếu Context thiếu thông tin về một bullet → KHÔNG bịa citation cho bullet đó.
+- KHÔNG viết danh sách "Citations:", "Trích nguồn:" hay "Tài liệu tham khảo:" ở cuối bài.
+
 
 CẤU TRÚC CÂU TRẢ LỜI:
 - Mỗi ý chính xuống dòng mới.
+- Cuối mỗi bullet có gán nhãn nguồn tham khảo [1], [2]
 - Dùng bullet (-) hoặc numbered list (1. 2. 3.).
-- Mỗi thông tin PHẢI có trích nguồn [1][2] ngay sau.
-- Trích nguồn CUỐI cùng, tách riêng khỏi câu trả lời bởi 2 dòng trống.
 
-ĐỊNH DẠNG TRÍCH NGUỒN:
-Kết thúc mỗi câu trả lời PHẢI có đoạn:
-Trích nguồn:
-[1] (Tài liệu: {{file_name}} | Chương: {{chapter}} | Mục: {{heading}}) "mô tả nội dung ngắn..."
-
-VÍ DỤ CÂU TRẢ LỜI:
-Bảng NGUOIDUNG có các thuộc tính sau:
-1. id_nguoidung - Mã người dùng (C(6), Số nguyên) [1]
-2. tennguoidung - Tên người dùng (C(50), Chữ cái) [1]
-3. matkhau - Mật khẩu (C(50), Chữ cái) [1]
-
-Bộ phận tham gia:
-- Bộ phận bán hàng (BP02) [2]
-- Bộ phận tài chính (BP03) [2]
-{footer}
 
 Ngữ cảnh:
 {context}"""
@@ -55,71 +38,64 @@ SUMMARY_PROMPT = """Bạn là trợ lý tóm tắt tài liệu. Tóm tắt dựa
 NGUYÊN TẮC TUYỆT ĐỐI:
 - CHỈ tóm tắt nội dung CÓ TRONG Context bên dưới.
 - KHÔNG bịa đặt, KHÔNG thêm thông tin ngoài Context.
-- Tóm tắt 100-300 từ, có cấu trúc bullet points.
-- Mỗi bullet PHẢI trích nguồn [1][2]. Chỉ dùng [1]-[{num_chunks}].
 - Nếu Context KHÔNG có thông tin → ghi: "Phần này không có trong tài liệu."
+- Nhãn nguồn chỉ đặt ở cuối bullet. Chỉ dùng nhãn từ [1] đến [{num_chunks}].
+- KHÔNG tự tạo khối "Citations:", "Trích nguồn:" hoặc "Tài liệu tham khảo:" ở cuối câu trả lời.
+- Nếu Context thiếu thông tin về một bullet → KHÔNG bịa citation cho bullet đó.
+
 
 CẤU TRÚC CÂU TRẢ LỜI:
 - Mỗi ý chính dùng bullet (-).
-- Mỗi bullet trích nguồn [1][2] ở cuối dòng.
+- Đặt nhãn trích dẫn [1], [2] trực tiếp ở cuối mỗi dòng bullet.
 - Xuống dòng rõ ràng, dễ đọc.
-- Trích nguồn CUỐI cùng, tách riêng khỏi câu trả lời bởi 2 dòng trống.
 
-ĐỊNH DẠNG TRÍCH NGUỒN:
-Kết thúc mỗi câu trả lời PHẢI có đoạn:
-Trích nguồn:
-[1] (Tài liệu: {{file_name}} | Chương: {{chapter}} | Mục: {{heading}}) "mô tả nội dung ngắn..."
-
-VÍ DỤ CÂU TRẢ LỜI:
-Quy trình QT02 là quy trình bán hàng cho khách hàng [1]:
-- Quy trình bao gồm 3 bước chính [1]
-- Bước 1: Tiếp nhận hàng hóa từ kho [2]
-- Bước 2: Giao hàng cho khách hàng [2]
-- Bước 3: Lập hóa đơn bán hàng [2]
-{footer}
 
 Ngữ cảnh:
 {context}"""
-
-EXTRACT_PROMPT = """Bạn là trợ lý trích xuất nguyên văn. Copy NGUYÊN VĂN từ ngữ cảnh.
-
-NGUYÊN TẮC TUYỆT ĐỐI:
-- CHỈ copy những gì CÓ TRONG Context bên dưới.
-- KHÔNG tạo nội dung mới, KHÔNG diễn giải.
-- Giữ nguyên định dạng (bảng, xuống dòng, bullet).
-- Trích nguồn [idx] ở cuối mỗi dòng/thông tin. Chỉ dùng [1]-[{num_chunks}].
-- Nếu Context KHÔNG có → nói: "Tài liệu không đề cập đến thông tin này."
-- Trích nguồn CUỐI cùng, tách riêng khỏi nội dung trích bởi 2 dòng trống.
-
-ĐỊNH DẠNG TRÍCH NGUỒN:
-Kết thúc mỗi câu trả lời PHẢI có đoạn:
-Trích nguồn:
-[1] (Tài liệu: {{file_name}} | Chương: {{chapter}} | Mục: {{heading}}) "mô tả nội dung ngắn..."
-
-VÍ DỤ CÂU TRẢ LỜI:
-id_nguoidung | tennguoidung | matkhau [1]
-001 | Nguyễn Văn A | ***** [1]
-002 | Trần Văn B | ***** [1]
-{footer}
-
-Ngữ cảnh:
-{context}"""
-
 
 def _format_prompt(template: str, context: str, num_chunks: int) -> str:
-    """Format prompt template bằng cách chèn CITATION_FOOTER vào {footer}."""
-    footer = CITATION_FOOTER.format(citations="")
-    return template.format(context=context, num_chunks=num_chunks, footer=footer)
+    """Format prompt template."""
+    return template.format(context=context, num_chunks=num_chunks)
 
 
-def _postprocess_response(text: str) -> str:
-    """Đảm bảo phần Trích nguồn không bị lặp và tách biệt khỏi câu trả lời."""
-    parts = text.split("Trích nguồn:")
-    if len(parts) > 2:
-        answer = parts[0].rstrip()
-        citations = "Trích nguồn:" + parts[-1]
-        text = f"{answer}\n\n{citations}"
-    return text
+# def build_references_section(answer_text: str, merged_chunks: List[Dict[str, Any]]) -> str:
+#     """
+#     Tạo phần 'Tài liệu tham khảo' tự động từ câu trả lời của LLM.
+#     Đọc nhãn [1], [2]... trong answer_text → lấy raw text + metadata từ merged_chunks.
+#     Đảm bảo 100% nguyên văn, không qua xử lý LLM.
+#     """
+#     cited_indices = sorted(list(set(int(m) for m in _re.findall(r'\[(\d+)\]', answer_text))))
+
+#     valid_references = []
+#     for idx in cited_indices:
+#         if 1 <= idx <= len(merged_chunks):
+#             chunk = merged_chunks[idx - 1]
+#             meta = chunk.get("metadata", {})
+#             raw_text = chunk.get("text", "").strip()
+
+#             clean_snippet = _re.sub(r'\s+', ' ', raw_text)
+#             if len(clean_snippet) > 180:
+#                 clean_snippet = clean_snippet[:175] + "..."
+
+#             meta_parts = []
+#             if meta.get("file_name"):
+#                 meta_parts.append(f"Tài liệu: {meta['file_name']}")
+#             if meta.get("chapter"):
+#                 meta_parts.append(f"Chương: {meta['chapter']}")
+#             if meta.get("heading"):
+#                 meta_parts.append(f"Mục: {meta['heading']}")
+#             elif meta.get("page"):
+#                 meta_parts.append(f"Trang: {meta['page']}")
+
+#             meta_str = " | ".join(meta_parts)
+#             ref_header = f"({meta_str})" if meta_str else ""
+
+#             valid_references.append(f" [{idx}] {ref_header} \"{clean_snippet}\"")
+
+#     if not valid_references:
+#         return ""
+
+#     return "\n\nTài liệu tham khảo:\n" + "\n".join(valid_references)
 
 
 class RAGService:
@@ -137,11 +113,13 @@ class RAGService:
         self.llm_service = llm_service
         self.bm25_index = bm25_index or BM25Index()
 
-    def _validate_answer(self, answer: str, context: str) -> str:
+    def _validate_answer(self, answer: str, context: str, num_chunks: int = 0) -> str:
         """Guardrail: Kiểm tra hallucination bằng word overlap + length check."""
+        # Defense-in-depth: loại bỏ <think>...</think> nếu còn sót
+        answer = _re.sub(r"<think>.*?</think>", "", answer, flags=_re.DOTALL).strip()
         answer_lower = answer.lower().strip()
 
-        # Always allow fallback phrases
+        # 1. Fallback phrases → cho qua
         fallback_phrases = [
             "tài liệu không đề cập",
             "không tìm thấy thông tin",
@@ -154,38 +132,30 @@ class RAGService:
         if any(p in answer_lower for p in fallback_phrases):
             return answer
 
-        # Nếu answer có trích nguồn [1], [2]... → cho qua (đang dùng context)
-        if _re.search(r'\[\d+\]', answer):
-            return answer
+        # 2. Citation hợp lệ [1]-[num_chunks] → cho qua
+        if num_chunks > 0:
+            citations = _re.findall(r'\[(\d+)\]', answer)
+            if citations:
+                max_cite = max(int(c) for c in citations)
+                if max_cite <= num_chunks:
+                    return answer
 
-        # No context → must reject
-        if not context or context.strip() == "Không tìm thấy ngữ cảnh trong nhóm tài liệu hiện tại.":
+        # 3. No context → reject
+        if not context or context.strip() == "":
             return "Tài liệu không đề cập đến thông tin này."
 
-        # Length sanity check: answer > 3x context length → likely hallucinated
+        # 4. Length check: answer > 3x context → reject
         if len(answer) > len(context) * 3 and len(answer) > 500:
             return "Tài liệu không đề cập đến thông tin này."
 
-        # Word overlap check with higher threshold
-        answer_words = set(_re.findall(r'\w{4,}', answer_lower))
-        context_words = set(_re.findall(r'\w{4,}', context.lower()))
-
-        if answer_words:
-            overlap = len(answer_words & context_words) / len(answer_words)
-            if overlap < 0.3:
-                return "Tài liệu không đề cập đến thông tin này."
-
-        # Check for new domain keywords not in context (NER-like)
-        domain_keywords = [
-            "mysql", "postgresql", "oracle", "sql server",
-            "python", "java", "javascript", "php",
-            "react", "angular", "vue",
-            "windows", "linux", "macos",
-            "cloud", "aws", "azure", "google cloud"
-        ]
-        for kw in domain_keywords:
-            if kw in answer_lower and kw not in context.lower():
-                return "Tài liệu không đề cập đến thông tin này."
+        # 5. Word overlap check (chỉ cho answer dài)
+        if len(answer) > 100:
+            answer_words = set(_re.findall(r'\w{4,}', answer_lower))
+            context_words = set(_re.findall(r'\w{4,}', context.lower()))
+            if answer_words:
+                overlap = len(answer_words & context_words) / len(answer_words)
+                if overlap < 0.3:
+                    return "Tài liệu không đề cập đến thông tin này."
 
         return answer
 
@@ -193,36 +163,49 @@ class RAGService:
         """Phân tích intent của user query."""
         q_low = user_query.strip().lower()
         intent = {
-            "is_extract": False,
             "is_summary": False,
             "chapter_match": None,
         }
 
-        if q_low.startswith(("/trich", "/extract")):
-            intent["is_extract"] = True
-        elif q_low.startswith(("/tomtat", "/tonghop")):
+        if q_low.startswith(("/tomtat", "/tonghop")):
             intent["is_summary"] = True
             m = _re.search(r"chương\s*(\d+)|chuong\s*(\d+)", user_query, _re.I)
             if m:
                 intent["chapter_match"] = m.group(1) or m.group(2)
-        else:
-            if _re.search(r"trích.*nguyên văn|nguyên văn|trích.*đoạn|bảng\s*\d+|extract|verbatim", user_query, _re.I):
-                intent["is_extract"] = True
-            elif _re.search(r"tóm tắt|tom tat|tổng hợp|tong hop", user_query, _re.I):
-                m = _re.search(r"chương\s*(\d+)|chuong\s*(\d+)|mục\s*([\d\.]+)|muc\s*([\d\.]+)", user_query, _re.I)
-                if m:
-                    intent["chapter_match"] = m.group(1) or m.group(2) or m.group(3) or m.group(4)
-                intent["is_summary"] = True
+        elif _re.search(r"tóm tắt|tom tat|tổng hợp|tong hop", user_query, _re.I):
+            m = _re.search(r"chương\s*(\d+)|chuong\s*(\d+)|mục\s*([\d\.]+)|muc\s*([\d\.]+)", user_query, _re.I)
+            if m:
+                intent["chapter_match"] = m.group(1) or m.group(2) or m.group(3) or m.group(4)
+            intent["is_summary"] = True
 
         return intent
 
-    def _get_all_chunks_map(self) -> Dict[str, Dict[str, Any]]:
-        """Lấy tất cả chunks từ ChromaDB để build neighbor map."""
+    def _get_neighbor_chunks_map(self, chunks: List[Dict[str, Any]]) -> Dict[str, Dict[str, Any]]:
+        """Chỉ lấy thông tin của các chunks hiện tại và prev/next IDs của chúng từ ChromaDB thay vì query toàn bộ DB."""
         chunks_map = {}
+        if not chunks:
+            return chunks_map
+
+        needed_ids = set()
+        for c in chunks:
+            meta = c.get("metadata", {})
+            cid = c.get("chunk_id") or meta.get("chunk_id", "")
+            if cid:
+                needed_ids.add(cid)
+            prev_id = meta.get("previous_chunk_id")
+            next_id = meta.get("next_chunk_id")
+            if prev_id:
+                needed_ids.add(prev_id)
+            if next_id:
+                needed_ids.add(next_id)
+
+        if not needed_ids:
+            return chunks_map
+
         try:
-            all_data = self.vector_store.collection.get()
-            if all_data and all_data["ids"]:
-                for cid, doc, meta in zip(all_data["ids"], all_data["documents"], all_data["metadatas"]):
+            matched_data = self.vector_store.collection.get(ids=list(needed_ids))
+            if matched_data and matched_data["ids"]:
+                for cid, doc, meta in zip(matched_data["ids"], matched_data["documents"], matched_data["metadatas"]):
                     chunks_map[cid] = {
                         "text": doc,
                         "metadata": meta,
@@ -282,12 +265,6 @@ class RAGService:
                     target_chapter in str(meta.get("heading", ""))):
                     r["rrf_score"] = r.get("rrf_score", 0) + 0.01
 
-        # Boost tables for extract intent with "bảng"
-        if intent.get("is_extract") and _re.search(r"bảng|table", user_query, _re.I):
-            for r in fused:
-                if r.get("metadata", {}).get("type") == "table":
-                    r["rrf_score"] = r.get("rrf_score", 0) + 0.005
-
         return fused
 
     def query(
@@ -303,28 +280,42 @@ class RAGService:
         enable_rerank: bool = config.ENABLE_RERANK
     ) -> Dict[str, Any]:
         """Xử lý câu hỏi: Hybrid search → Dedup → Neighbor → Context → LLM stream."""
+        t_total_start = time.perf_counter()
+        print(f"\n[RAG PIPELINE] 🚀 Bắt đầu truy vấn: \"{user_query}\" (LLM: {llm_model} | Embed: {embed_model})")
 
         # 1. Intent detection
         intent = self._detect_intent(user_query)
+        is_summary = intent.get("is_summary", False)
+
+        # Summary: lấy nhiều chunks hơn, num_ctx lớn hơn
+        search_top_k = top_k * 5 if is_summary else top_k
+        summary_num_ctx = max(num_ctx, 8192) if is_summary else num_ctx
 
         # 2. Embed query với prefix
+        t0 = time.perf_counter()
         query_vector = self.embedding_service.embed_query(user_query, model_name=embed_model)
+        t_embed = (time.perf_counter() - t0) * 1000
+        print(f"[RAG STEP 1] 🧠 Tạo Query Embedding ({embed_model}) ... [Xong: {t_embed:.1f} ms]")
 
         # 3. Hybrid search (Semantic + BM25 + RRF)
+        t0 = time.perf_counter()
         fused_results = self._hybrid_search(
             user_query, query_vector,
-            semantic_top_k=top_k,
-            bm25_top_k=top_k,
-            final_top_k=top_k,
+            semantic_top_k=search_top_k,
+            bm25_top_k=search_top_k,
+            final_top_k=search_top_k,
             intent=intent
         )
+        t_search = (time.perf_counter() - t0) * 1000
+        print(f"[RAG STEP 2] 🔍 Hybrid Search (Semantic + BM25) & RRF ... [Xong: {t_search:.1f} ms | Tìm thấy: {len(fused_results)} chunks]")
 
         # 4. Dedup
         deduped = deduplicate_chunks(fused_results)
 
         # 5. Neighbor expansion
+        t0 = time.perf_counter()
         if config.ENABLE_NEIGHBOR_EXPANSION and deduped:
-            all_chunks_map = self._get_all_chunks_map()
+            all_chunks_map = self._get_neighbor_chunks_map(deduped)
             expanded = expand_neighbors(
                 deduped, all_chunks_map,
                 max_expansion=config.NEIGHBOR_MAX_EXPANSION,
@@ -332,34 +323,43 @@ class RAGService:
             )
         else:
             expanded = deduped
+        t_neighbor = (time.perf_counter() - t0) * 1000
+        print(f"[RAG STEP 3] 🔗 Mở rộng đoạn lân cận (Neighbor Expansion) ... [Xong: {t_neighbor:.1f} ms]")
 
-        # 6. Context budget (neighbors đã merge vào chunk gốc → số chunks = top_k)
-        final_chunks = expanded[:top_k]
+        # 6. Context budget
+        final_chunks = expanded[:search_top_k]
 
-        # 7. Format context (build_context tự merge table chunks bên trong)
+        # 7. Format context
+        t0 = time.perf_counter()
+        dynamic_max_tokens = max(1000, num_ctx - 1000)
+        summary_max_tokens = summary_num_ctx - 1000 if is_summary else dynamic_max_tokens
         formatted_context, merged_chunks = build_context(
             final_chunks,
-            max_chunks=top_k,
-            max_tokens=config.MAX_CONTEXT_TOKENS
+            max_chunks=search_top_k,
+            max_tokens=summary_max_tokens
         )
+        t_context = (time.perf_counter() - t0) * 1000
 
         # Số chunks thực tế (dùng để giới hạn citation range [1]-[N])
         num_chunks = len(merged_chunks)
+        print(f"[RAG STEP 4] 📄 Đóng gói Ngữ cảnh (Context Builder) ... [Xong: {t_context:.1f} ms | Đã dùng: {num_chunks} chunks]")
 
-        # 8. Format sources for UI (= merged chunks, không cần cap)
+        # 8. Format sources for UI
         sources = format_sources_for_ui(merged_chunks)
 
         # 9. Relevance check
         if not formatted_context or formatted_context.strip() == "":
             no_result_msg = self._get_no_result_message(intent)
+            print("[RAG PIPELINE] ⚠️ Không có ngữ cảnh phù hợp để trả lời.")
             return {
                 "stream": iter([no_result_msg]),
                 "sources": sources,
                 "no_context": True
             }
 
-        if not has_sufficient_relevance(fused_results):
+        if not has_sufficient_relevance(merged_chunks):
             no_result_msg = self._get_no_result_message(intent)
+            print("[RAG PIPELINE] ⚠️ Độ liên quan của tài liệu chưa đạt ngưỡng.")
             return {
                 "stream": iter([no_result_msg]),
                 "sources": sources,
@@ -367,9 +367,7 @@ class RAGService:
             }
 
         # 10. Select prompt
-        if intent["is_extract"]:
-            prompt_template = EXTRACT_PROMPT
-        elif intent["is_summary"]:
+        if intent["is_summary"]:
             prompt_template = SUMMARY_PROMPT
         else:
             prompt_template = SYSTEM_PROMPT
@@ -384,23 +382,22 @@ class RAGService:
         messages.append({"role": "user", "content": final_query})
 
         # 12. Stream LLM
+        print(f"[LLM STEP 5] 🤖 Đã gửi Prompt sang LLM ({llm_model}) ... Đang chờ phản hồi...")
         stream_generator = self.llm_service.stream_chat(
             messages=messages,
             model_name=llm_model,
-            num_ctx=num_ctx,
+            num_ctx=summary_num_ctx,
             temperature=temperature,
             enable_thinking=enable_thinking
         )
 
         return {
             "stream": stream_generator,
-            "sources": sources
+            "sources": sources,
+            "merged_chunks": merged_chunks
         }
 
     @staticmethod
     def _get_no_result_message(intent: Dict[str, Any]) -> str:
         """Trả về message phù hợp khi không tìm thấy kết quả."""
-        if intent.get("is_extract"):
-            return "Không tìm thấy nội dung phù hợp trong tài liệu được cung cấp."
-        else:
-            return "Không tìm thấy thông tin phù hợp trong tài liệu được cung cấp."
+        return "Không tìm thấy thông tin phù hợp trong tài liệu được cung cấp."

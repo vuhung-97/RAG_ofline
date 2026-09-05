@@ -1,8 +1,11 @@
 """QThread workers cho background tasks: Upload/Embed, Stream LLM, Load Models."""
 
 import os
+import re
 import tempfile
+import time
 from PyQt6.QtCore import QThread, pyqtSignal
+# from services.rag_service import build_references_section
 
 
 class UploadWorker(QThread):
@@ -77,6 +80,7 @@ class StreamWorker(QThread):
         self._is_cancelled = False
 
     def run(self):
+        t_start = time.perf_counter()
         try:
             result = self.rag_service.query(
                 user_query=self.user_query,
@@ -100,11 +104,26 @@ class StreamWorker(QThread):
                 full_response += token
 
             if not self._is_cancelled and full_response:
+                merged_chunks = result.get("merged_chunks", [])
                 context_text = "\n".join([s.get("text", "") for s in result.get("sources", [])])
-                validated = self.rag_service._validate_answer(full_response, context_text)
-                if validated != full_response:
-                    # Guardrail fail → replace toàn bộ answer
+                num_chunks = len(result.get("sources", []))
+
+                # Loại bỏ <think>...</think> trước khi guardrail đánh giá
+                response_for_validate = re.sub(r"<think>.*?</think>", "", full_response, flags=re.DOTALL).strip()
+
+                validated = self.rag_service._validate_answer(response_for_validate, context_text, num_chunks)
+
+                if "Tài liệu không đề cập" in validated:
                     self.answer_replaced.emit(validated)
+                else:
+                    if validated != response_for_validate:
+                        self.answer_replaced.emit(validated)
+                    elif response_for_validate != full_response:
+                        # <think> đã bị strip → cập nhật bubble hiển thị bản sạch
+                        self.answer_replaced.emit(response_for_validate)
+
+            t_total = (time.perf_counter() - t_start) * 1000
+            print(f"[RAG FINISH] 🏁 Hoàn tất toàn bộ quy trình! [TỔNG THỜI GIAN: {t_total:.1f} ms]\n")
 
         except Exception as e:
             self.error.emit(str(e))

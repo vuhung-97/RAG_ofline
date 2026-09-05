@@ -48,9 +48,6 @@ class Config:
     SIMILARITY_THRESHOLD: float = 0.75
     USE_ADAPTIVE_THRESHOLD: bool = True
 
-    # Context Budget
-    MAX_CONTEXT_TOKENS: int = 3000
-
     # Neighbor Expansion
     ENABLE_NEIGHBOR_EXPANSION: bool = True
     NEIGHBOR_SAME_SECTION_ONLY: bool = True

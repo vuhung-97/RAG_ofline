@@ -1,13 +1,14 @@
 """Relevance checker — SRP: chỉ quyết định có đủ thông tin để trả lời."""
 
 from typing import List, Dict, Any
+from config import config as conf
 
 
 def has_sufficient_relevance(
     fused_results: List[Dict[str, Any]],
     min_score: float = 0.015,
     min_results: int = 1,
-    max_distance: float = 0.9
+    max_distance: float = None
 ) -> bool:
     """
     Kiểm tra xem kết quả retrieval có đủ tốt để trả lời.
@@ -23,6 +24,9 @@ def has_sufficient_relevance(
     if len(fused_results) < min_results:
         return False
 
+    if max_distance is None:
+        max_distance = conf.DISTANCE_THRESHOLD
+        
     top1 = fused_results[0]
     top1_rrf = top1.get("rrf_score", 0.0)
     if top1_rrf < min_score:

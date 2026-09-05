@@ -421,6 +421,10 @@ class MainWindow(QMainWindow):
         else:
             full_text = ""
 
+        # Loại bỏ <think>...</think> khỏi text hiển thị và lưu trữ
+        import re as _re
+        full_text = _re.sub(r"<think>.*?</think>", "", full_text, flags=_re.DOTALL).strip()
+
         # Finalize streaming
         self.chat_area.finalize_streaming(full_text)
 
