@@ -1,15 +1,16 @@
-import os
-import hashlib
+"""DocumentService — SRP: Điều phối luồng Ingest & Xóa Tài liệu."""
+
 from typing import List, Dict, Any
 from core.markitdown_loader import MarkItDownLoader
-from core.embedding_service import OllamaEmbeddingService
+from core.chunk_processor import ChunkProcessor
+from services.embedding_service import OllamaEmbeddingService
 from core.vector_store import ChromaVectorStore
 from core.bm25_index import BM25Index
 from config import config
 
 
 class DocumentService:
-    """SRP & Orchestration: Điều phối luồng Ingest Tài liệu."""
+    """SRP & Orchestration: Điều phối luồng Ingest và quản lý Tài liệu."""
 
     def __init__(
         self,
@@ -30,7 +31,7 @@ class DocumentService:
         embed_model: str = config.EMBED_MODEL,
         progress_callback=None
     ) -> Dict[str, Any]:
-        """Nạp file, cắt chunk, embed với prefix, lưu vào ChromaDB + BM25."""
+        """Nạp file, cắt chunk, gán ID & links, embed với prefix và lưu vào Vector/BM25 DB."""
         indexed_files = self.vector_store.get_indexed_files()
         if file_name in indexed_files:
             return {"status": "skipped", "message": f"File '{file_name}' đã có trong nhóm '{self.vector_store.current_workspace}'."}
@@ -38,30 +39,18 @@ class DocumentService:
         # 1. Load + Chunk qua MarkItDown
         metadata = {"file_name": file_name, "file_path": file_path, "workspace": self.vector_store.current_workspace}
         chunks = self.md_loader.load_and_chunk(file_path, metadata)
-
         if not chunks:
             return {"status": "warning", "message": f"File '{file_name}' không chứa nội dung văn bản."}
 
-        # 2. Gán chunk_id, prev_id, next_id
-        chunk_ids = []
-        for i, chunk in enumerate(chunks):
-            chunk_id = hashlib.md5(
-                f"{file_name}_{i}_{chunk['text'][:20]}".encode()
-            ).hexdigest()
-            chunk["metadata"]["chunk_id"] = chunk_id
-            chunk_ids.append(chunk_id)
+        # 2. Xử lý gán Chunk ID (MD5) & liên kết prev/next IDs qua ChunkProcessor
+        chunks = ChunkProcessor.process_and_link_chunks(chunks, file_name)
 
-        # Link chunks
-        for i in range(len(chunks)):
-            if i > 0:
-                chunks[i]["metadata"]["previous_chunk_id"] = chunk_ids[i - 1]
-            if i < len(chunks) - 1:
-                chunks[i]["metadata"]["next_chunk_id"] = chunk_ids[i + 1]
-
-        # 3. Embed với document prefix
+        # 3. Trích xuất texts và metadatas
+        chunk_ids = [c["metadata"]["chunk_id"] for c in chunks]
         texts = [c["text"] for c in chunks]
         metadatas = [c["metadata"] for c in chunks]
 
+        # 4. Embed documents
         def embed_progress(current, total):
             if progress_callback:
                 progress_callback(current, total)
@@ -70,7 +59,7 @@ class DocumentService:
             texts, model_name=embed_model, progress_callback=embed_progress
         )
 
-        # 4. Lưu vào ChromaDB
+        # 5. Lưu vào ChromaDB Vector Store
         self.vector_store.add_documents(
             ids=chunk_ids,
             embeddings=embeddings,
@@ -78,7 +67,7 @@ class DocumentService:
             metadatas=metadatas
         )
 
-        # 5. Build BM25 index
+        # 6. Lưu vào BM25 Index
         if config.BM25_ENABLED:
             self.bm25_index.add_documents(chunk_ids, texts, metadatas)
             try:

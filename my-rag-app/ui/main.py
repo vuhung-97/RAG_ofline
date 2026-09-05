@@ -16,12 +16,12 @@ from PyQt6.QtGui import QFont
 
 from config import config, get_installed_models
 from core.markitdown_loader import MarkItDownLoader
-from core.embedding_service import OllamaEmbeddingService
 from core.vector_store import ChromaVectorStore
-from core.llm_service import OllamaLLMService
 from core.bm25_index import BM25Index
 from core.app_settings import AppSettings
 from core.chat_logger import ChatLogger
+from services.embedding_service import OllamaEmbeddingService
+from services.llm_service import OllamaLLMService
 from services.document_service import DocumentService
 from services.rag_service import RAGService
 

@@ -15,7 +15,7 @@ sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from config import config
-from core.embedding_service import OllamaEmbeddingService
+from services.embedding_service import OllamaEmbeddingService
 from core.vector_store import ChromaVectorStore
 from core.bm25_index import BM25Index
 from retrieval.fusion import reciprocal_rank_fusion

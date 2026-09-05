@@ -15,7 +15,7 @@ def preprocess_query_text(text: str) -> str:
 class OllamaEmbeddingService:
     """SRP: Gọi Ollama REST API để tạo Vector Embedding với query/document prefix (EmbeddingGemma)."""
 
-    def __init__(self, host: str = config.OLLAMA_HOST, batch_size: int = 16):
+    def __init__(self, host: str = config.OLLAMA_HOST, batch_size: int = config.EMBED_BATCH_SIZE if hasattr(config, 'EMBED_BATCH_SIZE') else 16):
         self.host = host
         self.api_url = f"{host}/api/embed"
         self.batch_size = batch_size

@@ -17,6 +17,13 @@ class Config:
     EMBED_QUERY_PREFIX: str = "task: search result | query: "
     EMBED_DOC_PREFIX: str = "task: search result | document: "
     EMBED_DIMENSION: int = 768
+    EMBED_BATCH_SIZE: int = 16
+
+    # Pipeline Tuning & Guardrail Thresholds
+    CHAT_HISTORY_LIMIT: int = 4
+    INTENT_BOOST_SCORE: float = 0.01
+    OVERHEAD_TOKENS: int = 1000
+    GUARDRAIL_MIN_WORD_OVERLAP: float = 0.3
 
     # Chunking Configurations (MarkItDown + LangChain RecursiveCharacterTextSplitter)
     CHUNK_SIZE: int = 750

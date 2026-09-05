@@ -12,9 +12,9 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from config import config
 from core.markitdown_loader import MarkItDownLoader
-from core.embedding_service import OllamaEmbeddingService
+from services.embedding_service import OllamaEmbeddingService
 from core.vector_store import ChromaVectorStore
-from core.llm_service import OllamaLLMService
+from services.llm_service import OllamaLLMService
 from core.bm25_index import BM25Index
 from services.document_service import DocumentService
 from services.rag_service import RAGService
