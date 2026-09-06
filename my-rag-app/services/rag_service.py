@@ -16,6 +16,7 @@ from retrieval.dedup import deduplicate_chunks
 from retrieval.neighbor_expander import expand_neighbors
 from retrieval.context_builder import build_context, format_sources_for_ui
 from retrieval.relevance_checker import has_sufficient_relevance
+from core.reranker import LLMReranker
 from config import config
 
 
@@ -86,7 +87,7 @@ class RAGService:
         enable_thinking: bool = config.ENABLE_THINKING,
         enable_rerank: bool = config.ENABLE_RERANK
     ) -> Dict[str, Any]:
-        """Xử lý câu hỏi: Hybrid search → Dedup → Neighbor → Context → LLM stream."""
+        """Xử lý câu hỏi: Hybrid search → Dedup → Rerank → Neighbor → Context → LLM stream."""
         print(f"\n[RAG PIPELINE] 🚀 Bắt đầu truy vấn: \"{user_query}\" (LLM: {llm_model} | Embed: {embed_model})")
 
         # 1. Intent detection
@@ -117,7 +118,17 @@ class RAGService:
         # 4. Dedup
         deduped = deduplicate_chunks(fused_results)
 
-        # 5. Neighbor expansion
+        # 5. Rerank (trước neighbor expansion để đánh giá chunk gốc, skip summary)
+        t0 = time.perf_counter()
+        do_rerank = enable_rerank and not is_summary
+        if do_rerank:
+            reranker = LLMReranker()
+            deduped = reranker.rerank(user_query, deduped, llm_model, top_k=top_k)
+        t_rerank = (time.perf_counter() - t0) * 1000
+        if do_rerank:
+            print(f"[RAG STEP 3] 🏆 Rerank ... [Xong: {t_rerank:.1f} ms]")
+
+        # 6. Neighbor expansion
         t0 = time.perf_counter()
         if config.ENABLE_NEIGHBOR_EXPANSION and deduped:
             all_chunks_map = self._get_neighbor_chunks_map(deduped)
@@ -129,9 +140,9 @@ class RAGService:
         else:
             expanded = deduped
         t_neighbor = (time.perf_counter() - t0) * 1000
-        print(f"[RAG STEP 3] 🔗 Mở rộng đoạn lân cận (Neighbor Expansion) ... [Xong: {t_neighbor:.1f} ms]")
+        print(f"[RAG STEP 4] 🔗 Mở rộng đoạn lân cận (Neighbor Expansion) ... [Xong: {t_neighbor:.1f} ms]")
 
-        # 6. Context budget & formatting
+        # 7. Context budget & formatting
         final_chunks = expanded[:search_top_k]
         t0 = time.perf_counter()
         dynamic_max_tokens = max(1000, num_ctx - 1000)
@@ -144,11 +155,11 @@ class RAGService:
         t_context = (time.perf_counter() - t0) * 1000
 
         num_chunks = len(merged_chunks)
-        print(f"[RAG STEP 4] 📄 Đóng gói Ngữ cảnh (Context Builder) ... [Xong: {t_context:.1f} ms | Đã dùng: {num_chunks} chunks]")
+        print(f"[RAG STEP 5] 📄 Đóng gói Ngữ cảnh (Context Builder) ... [Xong: {t_context:.1f} ms | Đã dùng: {num_chunks} chunks]")
 
         sources = format_sources_for_ui(merged_chunks)
 
-        # 7. Relevance check
+        # 8. Relevance check
         if not formatted_context or not formatted_context.strip() or not has_sufficient_relevance(merged_chunks):
             no_result_msg = self._get_no_result_message(intent)
             print("[RAG PIPELINE] ⚠️ Không có ngữ cảnh đủ độ liên quan để trả lời.")
@@ -158,12 +169,12 @@ class RAGService:
                 "no_context": True
             }
 
-        # 8. Build Prompt & Messages via PromptBuilder
+        # 9. Build Prompt & Messages via PromptBuilder
         system_content = PromptBuilder.build_system_content(is_summary, formatted_context, num_chunks)
         messages = PromptBuilder.build_messages(system_content, user_query, chat_history, enable_thinking)
 
-        # 9. Stream LLM
-        print(f"[LLM STEP 5] 🤖 Đã gửi Prompt sang LLM ({llm_model}) ... Đang chờ phản hồi...")
+        # 10. Stream LLM
+        print(f"[LLM STEP 6] 🤖 Đã gửi Prompt sang LLM ({llm_model}) ... Đang chờ phản hồi...")
         stream_generator = self.llm_service.stream_chat(
             messages=messages,
             model_name=llm_model,

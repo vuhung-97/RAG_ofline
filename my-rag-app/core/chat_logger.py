@@ -25,6 +25,7 @@ class ChatLogger:
         query: str,
         response: str,
         sources: List[Dict[str, Any]] = None,
+        merged_chunks: List[Dict[str, Any]] = None,
         settings: Dict[str, Any] = None,
         no_context: bool = False,
         elapsed_ms: int = 0,
@@ -37,6 +38,8 @@ class ChatLogger:
             "response": response,
             "sources_count": len(sources) if sources else 0,
             "sources": self._trim_sources(sources) if sources else [],
+            "merged_count": len(merged_chunks) if merged_chunks else 0,
+            "merged_chunks": self._trim_merged(merged_chunks) if merged_chunks else [],
             "settings": settings or {},
             "no_context": no_context,
             "elapsed_ms": elapsed_ms,
@@ -59,6 +62,23 @@ class ChatLogger:
                 "distance": s.get("distance", 0),
                 "rerank_score": s.get("rerank_score"),
                 "text_preview": s.get("text", "")[:150]
+            })
+        return trimmed
+
+    def _trim_merged(self, merged_chunks: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """Rút gọn merged_chunks để log (giữ nhiều thông tin hơn sources để debug)."""
+        trimmed = []
+        for c in merged_chunks:
+            meta = c.get("metadata", {})
+            trimmed.append({
+                "chunk_id": c.get("chunk_id", ""),
+                "file_name": meta.get("file_name", ""),
+                "chapter": meta.get("chapter", ""),
+                "heading": meta.get("heading", ""),
+                "subheading": meta.get("subheading", ""),
+                "text_preview": c.get("text", "")[:300],
+                "rrf_score": c.get("rrf_score", 0),
+                "distance": c.get("distance", 0),
             })
         return trimmed
 

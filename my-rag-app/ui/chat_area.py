@@ -3,7 +3,7 @@
 import re
 import time
 from PyQt6.QtWidgets import (
-    QScrollArea, QWidget, QVBoxLayout, QLabel, QFrame
+    QScrollArea, QWidget, QVBoxLayout, QLabel, QFrame, QApplication
 )
 from PyQt6.QtCore import Qt, QTimer
 
@@ -78,7 +78,6 @@ class ChatArea(QScrollArea):
             self._streaming_bubble.text = new_text
             # inherit current app font size for streaming
             try:
-                from PyQt6.QtWidgets import QApplication
                 fs = QApplication.instance().font().pointSize()
             except Exception:
                 fs = None
@@ -93,7 +92,6 @@ class ChatArea(QScrollArea):
             self._stop_timer()
             self._streaming_bubble.text = new_text
             try:
-                from PyQt6.QtWidgets import QApplication
                 fs = QApplication.instance().font().pointSize()
             except Exception:
                 fs = None
@@ -108,7 +106,6 @@ class ChatArea(QScrollArea):
             self._stop_timer()
             self._streaming_bubble.text = full_text
             try:
-                from PyQt6.QtWidgets import QApplication
                 fs = QApplication.instance().font().pointSize()
             except Exception:
                 fs = None

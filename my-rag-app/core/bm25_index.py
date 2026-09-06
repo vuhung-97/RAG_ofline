@@ -59,6 +59,7 @@ class BM25Index:
 
     def add_documents(self, ids: List[str], texts: List[str], metadatas: List[Dict]):
         """Thêm documents vào index (rebuild toàn bộ)."""
+        self.load()  # reload từ disk để đảm bảo corpus_ids là mới nhất
         all_ids = self.corpus_ids + list(ids)
         all_texts = self.corpus_texts + list(texts)
         all_metadatas = self.corpus_metadatas + list(metadatas)

@@ -9,7 +9,7 @@ class Config:
     LLM_MODEL: str = "qwen3:1.7b"
     OLLAMA_HOST: str = "http://localhost:11434"
     OLLAMA_KEEP_ALIVE: str = "5m"
-    LLM_NUM_CTX: int = 8192
+    LLM_NUM_CTX: int = 8192  # fallback mặc định — giá trị thực lấy từ app_settings.json
     TEMPERATURE: float = 0.0
     ENABLE_THINKING: bool = True
 
@@ -22,7 +22,6 @@ class Config:
     # Pipeline Tuning & Guardrail Thresholds
     CHAT_HISTORY_LIMIT: int = 4
     INTENT_BOOST_SCORE: float = 0.01
-    OVERHEAD_TOKENS: int = 1000
     GUARDRAIL_MIN_WORD_OVERLAP: float = 0.3
 
     # Chunking Configurations (MarkItDown + LangChain RecursiveCharacterTextSplitter)
@@ -35,25 +34,15 @@ class Config:
 
     # Retrieval & Storage Configurations
     TOP_K: int = 6
-    RERANK_CANDIDATES: int = 12
     ENABLE_RERANK: bool = True
-    RERANK_TIMEOUT: int = 25
-    DISTANCE_THRESHOLD: float = 1.10
+    DISTANCE_THRESHOLD: float = 1.5
     CHROMA_PERSIST_DIR: str = os.path.join(os.path.dirname(__file__), "chroma_db")
     DEFAULT_WORKSPACE: str = "Tài liệu chung"
 
     # Hybrid Search (BM25 + Semantic)
     BM25_ENABLED: bool = True
-    BM25_TOP_K: int = 8
     BM25_INDEX_PATH: str = os.path.join(os.path.dirname(__file__), "bm25_index")
-    SEMANTIC_TOP_K: int = 8
-    FINAL_TOP_K: int = 8
-    FUSION_METHOD: str = "rrf"
     RRF_K: int = 60
-
-    # Similarity Threshold
-    SIMILARITY_THRESHOLD: float = 0.75
-    USE_ADAPTIVE_THRESHOLD: bool = True
 
     # Neighbor Expansion
     ENABLE_NEIGHBOR_EXPANSION: bool = True
@@ -63,6 +52,9 @@ class Config:
     # Performance Logging
     ENABLE_PERF_LOGGING: bool = True
 
+    # Reranker
+    RERANK_TIMEOUT: int = 60
+
 config = Config()
 
 def get_installed_models(host: str = config.OLLAMA_HOST) -> dict:
@@ -71,8 +63,8 @@ def get_installed_models(host: str = config.OLLAMA_HOST) -> dict:
         res = requests.get(f"{host}/api/tags", timeout=5)
         if res.status_code == 200:
             models = [m["name"] for m in res.json().get("models", [])]
-            embed_models = [m for m in models if "embed" in m.lower() or "bge" in m.lower() or "gemma" in m.lower()]
-            llm_models = [m for m in models if m not in embed_models or "qwen" in m.lower() or "gemma3" in m.lower()]
+            embed_models = [m for m in models if "embed" in m.lower()]
+            llm_models = [m for m in models if m not in embed_models]
             return {
                 "all": models,
                 "embed": embed_models if embed_models else models,

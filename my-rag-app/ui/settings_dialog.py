@@ -7,9 +7,7 @@ from PyQt6.QtWidgets import (
     QGroupBox, QFrame, QCheckBox
 )
 from PyQt6.QtCore import Qt, pyqtSignal
-
-OVERHEAD_TOKENS = 1000
-MAX_CHUNK_TOKENS = 750  # CHUNK_SIZE = 750 chars, neighbors merged vào → chunk lớn hơn
+from config import config
 
 
 class SettingsDialog(QDialog):
@@ -196,7 +194,7 @@ class SettingsDialog(QDialog):
         # Hiển thị info num_ctx tự động
         top_k_val = settings.get("top_k", 6)
         num_ctx_val = settings.get("num_ctx", 8192)
-        self.info_label.setText(f"Tự động: {num_ctx_val} token (cho {top_k_val} chunks × {MAX_CHUNK_TOKENS})")
+        self.info_label.setText(f"Tự động: {num_ctx_val} token (cho {top_k_val} chunks × {config.CHUNK_SIZE})")
 
     def _on_save(self):
         """Lưu cài đặt và emit signal."""

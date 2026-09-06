@@ -73,6 +73,10 @@ class MainWindow(QMainWindow):
         self._query_start_ms = 0
         self._current_query = ""
 
+        # Lưu sources + merged_chunks cho log (A+B)
+        self._last_sources = []
+        self._last_merged = []
+
         # Setup UI
         self._setup_ui()
 
@@ -127,7 +131,7 @@ class MainWindow(QMainWindow):
         splitter.setHandleWidth(2)
 
         # Sidebar
-        self.sidebar = Sidebar(self.vector_store)
+        self.sidebar = Sidebar(self.vector_store, self.document_service)
         self.sidebar.setMinimumWidth(250)
         self.sidebar.setMaximumWidth(400)
 
@@ -364,6 +368,8 @@ class MainWindow(QMainWindow):
         )
         self.stream_worker.token_received.connect(self._on_token_received)
         self.stream_worker.answer_replaced.connect(self._on_answer_replaced)
+        self.stream_worker.sources_ready.connect(self._on_sources_ready)
+        self.stream_worker.merged_ready.connect(self._on_merged_ready)
         self.stream_worker.finished.connect(self._on_stream_finished)
         self.stream_worker.error.connect(self._on_stream_error)
         self.stream_worker.start()
@@ -383,6 +389,14 @@ class MainWindow(QMainWindow):
             self.chat_area.replace_streaming_text(new_text)
             # Cập nhật full_text trong bubble
             self.chat_area._streaming_bubble.text = new_text
+
+    def _on_sources_ready(self, sources):
+        """Lưu sources cho log."""
+        self._last_sources = sources
+
+    def _on_merged_ready(self, merged_chunks):
+        """Lưu merged_chunks cho log."""
+        self._last_merged = merged_chunks
 
     def _on_stop_stream(self):
         """Dừng stream hiện tại."""
@@ -446,7 +460,8 @@ class MainWindow(QMainWindow):
         self.chat_logger.log_entry(
             query=self._current_query,
             response=full_text,
-            sources=[],
+            sources=self._last_sources,
+            merged_chunks=self._last_merged,
             settings={
                 "llm": self.selected_llm,
                 "embed": self.selected_embed,
@@ -459,6 +474,10 @@ class MainWindow(QMainWindow):
             no_context=no_context,
             elapsed_ms=elapsed_ms,
         )
+
+        # Reset cho lượt sau
+        self._last_sources = []
+        self._last_merged = []
 
     def _on_stream_error(self, error_msg):
         """Khi stream gặp lỗi."""

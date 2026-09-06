@@ -23,9 +23,10 @@ class Sidebar(QWidget):
     settings_clicked = pyqtSignal()
     progress_update = pyqtSignal(int, str)
 
-    def __init__(self, vector_store, parent=None):
+    def __init__(self, vector_store, document_service=None, parent=None):
         super().__init__(parent)
         self.vector_store = vector_store
+        self.document_service = document_service
         self.setObjectName("sidebar")
         self.setMinimumWidth(250)
         self.setMaximumWidth(400)
@@ -215,7 +216,11 @@ class Sidebar(QWidget):
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
         )
         if reply == QMessageBox.StandardButton.Yes:
-            n = self.vector_store.delete_file(file_name)
+            if self.document_service:
+                result = self.document_service.remove_file(file_name)
+                n = result.get("chunks_removed", 0)
+            else:
+                n = self.vector_store.delete_file(file_name)
             self._refresh_file_list()
             # chỉ xóa file, không xóa chat
             if n > 0:

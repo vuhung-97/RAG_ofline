@@ -56,12 +56,12 @@ class ChromaVectorStore:
         try:
             cols = {c.name: getattr(c, "id", None) for c in self.client.list_collections()}
             uuid_to_delete = cols.get(sanitized)
-        except Exception:
-            pass
+        except Exception as e:
+            print(f"[WARN] Lấy UUID workspace khi xóa: {e}")
         try:
             self.client.delete_collection(name=sanitized)
-        except Exception:
-            pass
+        except Exception as e:
+            print(f"[WARN] Xóa collection '{sanitized}': {e}")
         # xóa folder vật lý chroma_db/<uuid> nếu còn
         if uuid_to_delete:
             try:
@@ -69,8 +69,8 @@ class ChromaVectorStore:
                 folder = os.path.join(config.CHROMA_PERSIST_DIR, str(uuid_to_delete))
                 if os.path.isdir(folder):
                     shutil.rmtree(folder)
-            except Exception:
-                pass
+            except Exception as e:
+                print(f"[WARN] Xóa folder vật lý chroma_db/{uuid_to_delete}: {e}")
             # VACUUM để shrink sqlite (không bắt buộc, thử best-effort)
             try:
                 import sqlite3
@@ -79,8 +79,8 @@ class ChromaVectorStore:
                     con = sqlite3.connect(db_path)
                     con.execute("VACUUM")
                     con.close()
-            except Exception:
-                pass
+            except Exception as e:
+                print(f"[WARN] VACUUM database sqlite: {e}")
         if self.current_workspace == workspace_name:
             self.set_workspace(config.DEFAULT_WORKSPACE)
 
@@ -92,8 +92,8 @@ class ChromaVectorStore:
             if ids:
                 self.collection.delete(ids=ids)
                 return len(ids)
-        except Exception:
-            pass
+        except Exception as e:
+            print(f"[WARN] Xóa file '{file_name}': {e}")
         return 0
 
     def add_documents(self, ids: List[str], embeddings: List[List[float]], documents: List[str], metadatas: List[Dict[str, Any]]):

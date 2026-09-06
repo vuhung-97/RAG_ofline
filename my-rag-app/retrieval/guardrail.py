@@ -13,13 +13,23 @@ FALLBACK_PHRASES = [
     "không chắc"
 ]
 
+GUARDRAIL_WARNING = (
+    "\n\n> ⚠️ Cảnh báo: Câu trả lời có thể chứa thông tin "
+    "không hoàn toàn khớp với tài liệu (độ trùng từ thấp)."
+)
+
 
 class GuardrailValidator:
     """Kiểm tra tính hợp lệ của câu trả lời từ LLM trước khi chốt hiển thị."""
 
     @staticmethod
     def validate_answer(answer: str, context: str, num_chunks: int = 0) -> str:
-        """Kiểm tra hallucination dựa trên citations, length ratio và word overlap."""
+        """Kiểm tra hallucination dựa trên citations, length ratio và word overlap.
+
+        Trả về answer gốc nếu hợp lệ.
+        Trả về answer + warning nếu có vấn đề.
+        Trả về fallback ngắn nếu context hoàn toàn rỗng.
+        """
         # Loại bỏ <think>...</think> nếu còn sót
         answer = re.sub(r"<think>.*?</think>", "", answer, flags=re.DOTALL).strip()
         answer_lower = answer.lower().strip()
@@ -40,9 +50,9 @@ class GuardrailValidator:
         if not context or context.strip() == "":
             return "Tài liệu không đề cập đến thông tin này."
 
-        # 4. Length check: answer > 3x context → reject
+        # 4. Length check: answer > 3x context → warning
         if len(answer) > len(context) * 3 and len(answer) > 500:
-            return "Tài liệu không đề cập đến thông tin này."
+            return answer + GUARDRAIL_WARNING
 
         # 5. Word overlap check (chỉ áp dụng cho answer dài)
         if len(answer) > 100:
@@ -52,6 +62,6 @@ class GuardrailValidator:
                 overlap = len(answer_words & context_words) / len(answer_words)
                 min_overlap = config.GUARDRAIL_MIN_WORD_OVERLAP if hasattr(config, "GUARDRAIL_MIN_WORD_OVERLAP") else 0.3
                 if overlap < min_overlap:
-                    return "Tài liệu không đề cập đến thông tin này."
+                    return answer + GUARDRAIL_WARNING
 
         return answer

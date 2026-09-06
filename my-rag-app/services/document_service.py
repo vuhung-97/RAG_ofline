@@ -101,7 +101,8 @@ class DocumentService:
 
         return {
             "status": "success",
-            "message": f"Đã xóa '{file_name}' ({removed} chunks)."
+            "message": f"Đã xóa '{file_name}' ({removed} chunks).",
+            "chunks_removed": removed,
         }
 
     def rebuild_bm25_index(self):

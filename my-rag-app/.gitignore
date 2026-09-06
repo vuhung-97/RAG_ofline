@@ -19,6 +19,9 @@ venv/
 # Temp files
 temp/
 
+# Tests
+tests/
+
 # Environment
 .env
 

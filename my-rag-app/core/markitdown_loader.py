@@ -26,7 +26,8 @@ class MarkItDownLoader:
             ("###", "subheading"),
         ]
         self._md_splitter = MarkdownHeaderTextSplitter(
-            headers_to_split_on=self._headers
+            headers_to_split_on=self._headers,
+            strip_headers=False
         )
         self._text_splitter = RecursiveCharacterTextSplitter(
             chunk_size=config.CHUNK_SIZE,

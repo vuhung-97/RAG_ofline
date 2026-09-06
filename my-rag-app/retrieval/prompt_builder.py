@@ -12,7 +12,7 @@ NGUYÊN TẮC TUYỆT ĐỐI:
 - Mỗi dòng phải có một nhãn nguồn [1], [2]; nhãn nguồn chỉ đặt ở cuối dòng; chỉ dùng nhãn từ [1] đến [{num_chunks}].
 - Nếu Context thiếu thông tin về một bullet → KHÔNG bịa citation cho bullet đó.
 - KHÔNG viết danh sách "Citations:", "Trích nguồn:" hay "Tài liệu tham khảo:" ở cuối bài.
-
+- YÊU CẦU: Trả lời trực tiếp câu hỏi ngay lập tức. KHÔNG suy luận ngầm, KHÔNG xuất ra khối suy nghĩ <think>.
 
 CẤU TRÚC CÂU TRẢ LỜI:
 - Mỗi ý chính xuống dòng mới.
@@ -66,6 +66,5 @@ class PromptBuilder:
         if chat_history:
             messages.extend(chat_history[-limit:])
 
-        final_query = user_query if enable_thinking else f"/no_think {user_query}"
-        messages.append({"role": "user", "content": final_query})
+        messages.append({"role": "user", "content": user_query})
         return messages

@@ -34,7 +34,8 @@ def reciprocal_rank_fusion(
                 "metadata": metadata,
                 "semantic_score": score,
                 "bm25_score": 0.0,
-                "rrf_score": 0.0
+                "rrf_score": 0.0,
+                "distance": score,
             }
         result_map[chunk_id]["semantic_score"] = score
 
@@ -48,7 +49,8 @@ def reciprocal_rank_fusion(
                 "metadata": metadata,
                 "semantic_score": 0.0,
                 "bm25_score": score,
-                "rrf_score": 0.0
+                "rrf_score": 0.0,
+                "distance": None,
             }
         result_map[chunk_id]["bm25_score"] = score
 
