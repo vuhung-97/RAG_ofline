@@ -17,6 +17,10 @@ DEFAULTS: Dict[str, Any] = {
     "font_size": config.FONT_SIZE,
     "enable_thinking": config.ENABLE_THINKING,
     "enable_rerank": config.ENABLE_RERANK,
+    "semantic_top_k": config.SEMANTIC_TOP_K,
+    "bm25_top_k": config.BM25_TOP_K,
+    "fusion_top_k": config.FUSION_TOP_K,
+    "final_top_k": config.FINAL_TOP_K,
 }
 
 

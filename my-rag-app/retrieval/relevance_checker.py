@@ -1,4 +1,7 @@
-"""Relevance checker — SRP: chỉ quyết định có đủ thông tin để trả lời."""
+"""Relevance checker — SRP: chỉ quyết định có đủ thông tin để trả lời.
+
+Sửa: Xử lý distance=None (BM25-only), dùng rerank_score khi có, multi-signal.
+"""
 
 from typing import List, Dict, Any
 from config import config as conf
@@ -15,8 +18,9 @@ def has_sufficient_relevance(
 
     Multi-signal check:
     - Có ít nhất min_results kết quả
-    - Top-1 RRF score > min_score
-    - Top-1 distance < max_distance (quality gate)
+    - Nếu có rerank_score → dựa vào rerank_score (highest priority)
+    - Nếu có semantic distance → check distance quality gate
+    - Fallback: check RRF score
     """
     if not fused_results:
         return False
@@ -26,15 +30,22 @@ def has_sufficient_relevance(
 
     if max_distance is None:
         max_distance = conf.DISTANCE_THRESHOLD
-        
+
     top1 = fused_results[0]
+
+    # 1. Rerank score (highest priority — reranker đã confirm)
+    rerank_score = top1.get("rerank_score")
+    if rerank_score is not None and rerank_score > 0:
+        return True
+
+    # 2. RRF score
     top1_rrf = top1.get("rrf_score", 0.0)
     if top1_rrf < min_score:
         return False
 
-    # Check semantic distance quality
-    top1_distance = top1.get("distance", 0.0)
-    if top1_distance > max_distance:
+    # 3. Distance quality gate (chỉ check nếu có — BM25-only candidates có distance=None)
+    top1_distance = top1.get("distance")
+    if top1_distance is not None and top1_distance > max_distance:
         return False
 
     return True
@@ -65,9 +76,12 @@ def compute_confidence(fused_results: List[Dict[str, Any]]) -> float:
     # Signal 3: Number of results (more = more evidence)
     count_signal = min(len(fused_results) / 5, 1.0)
 
-    # Signal 4: Distance quality (lower distance = better)
-    distance = top1.get("distance", 1.0)
-    distance_signal = max(0, 1.0 - distance)
+    # Signal 4: Distance quality (lower distance = better, handle None)
+    distance = top1.get("distance")
+    if distance is not None:
+        distance_signal = max(0, 1.0 - distance)
+    else:
+        distance_signal = 0.5  # BM25-only: neutral score
 
     # Weighted combination
     confidence = (

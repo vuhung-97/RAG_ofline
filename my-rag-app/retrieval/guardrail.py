@@ -1,4 +1,7 @@
-"""GuardrailValidator — SRP: kiểm tra và lọc ảo giác (hallucination) trong câu trả lời LLM."""
+"""GuardrailValidator — SRP: kiểm tra và lọc ảo giác (hallucination) trong câu trả lời LLM.
+
+Sửa: Bỏ regex strip <think> (instruct model không tạo thinking blocks).
+"""
 
 import re
 from config import config
@@ -30,8 +33,6 @@ class GuardrailValidator:
         Trả về answer + warning nếu có vấn đề.
         Trả về fallback ngắn nếu context hoàn toàn rỗng.
         """
-        # Loại bỏ <think>...</think> nếu còn sót
-        answer = re.sub(r"<think>.*?</think>", "", answer, flags=re.DOTALL).strip()
         answer_lower = answer.lower().strip()
 
         # 1. Fallback phrases → cho qua

@@ -18,12 +18,21 @@ class HybridSearcher:
         self,
         user_query: str,
         query_vector: List[float],
-        semantic_top_k: int,
-        bm25_top_k: int,
-        final_top_k: int,
-        intent: Dict[str, Any]
+        semantic_top_k: int = None,
+        bm25_top_k: int = None,
+        fusion_top_k: int = None,
+        intent: Dict[str, Any] = None
     ) -> List[Dict[str, Any]]:
         """Thực thi Semantic Search + BM25 Search -> RRF Fusion -> Intent Boosting."""
+        if semantic_top_k is None:
+            semantic_top_k = config.SEMANTIC_TOP_K
+        if bm25_top_k is None:
+            bm25_top_k = config.BM25_TOP_K
+        if fusion_top_k is None:
+            fusion_top_k = config.FUSION_TOP_K
+        if intent is None:
+            intent = {}
+
         # 1. Semantic search
         semantic_results_raw = self.vector_store.search_similarity(
             query_vector, top_k=semantic_top_k
@@ -44,13 +53,23 @@ class HybridSearcher:
         # 3. RRF Fusion
         fused = reciprocal_rank_fusion(
             semantic_tuples, bm25_tuples,
-            k=config.RRF_K, final_top_k=final_top_k
+            k=config.RRF_K, final_top_k=fusion_top_k
         )
 
-        # 4. Intent-based boosting
+        # 4. Intent-based boosting (cho MỌI query, không chỉ summary)
+        if intent:
+            self._apply_intent_boost(fused, intent)
+
+        return fused
+
+    def _apply_intent_boost(self, fused: List[Dict[str, Any]], intent: Dict[str, Any]):
+        """Áp dụng intent-based boosting và sort lại."""
+        boost_score = config.INTENT_BOOST_SCORE
+
+        # Boost chapter match
         target_chapter = intent.get("chapter_match")
-        boost_score = config.INTENT_BOOST_SCORE if hasattr(config, "INTENT_BOOST_SCORE") else 0.01
         if target_chapter:
+            boosted_any = False
             for r in fused:
                 meta = r.get("metadata", {})
                 chap = str(meta.get("chapter", ""))
@@ -60,5 +79,36 @@ class HybridSearcher:
                     f"CHƯƠNG {target_chapter}" in text or
                     target_chapter in str(meta.get("heading", ""))):
                     r["rrf_score"] = r.get("rrf_score", 0) + boost_score
+                    boosted_any = True
+            if boosted_any:
+                fused.sort(key=lambda x: -x.get("rrf_score", 0))
 
-        return fused
+        # Boost section match
+        target_section = intent.get("section_match")
+        if target_section:
+            boosted_any = False
+            for r in fused:
+                meta = r.get("metadata", {})
+                heading = str(meta.get("heading", ""))
+                text = r.get("text", "")
+                if (target_section in heading or
+                    f"Mục {target_section}" in text or
+                    f"mục {target_section}" in text or
+                    f"§ {target_section}" in text):
+                    r["rrf_score"] = r.get("rrf_score", 0) + boost_score * 0.5
+                    boosted_any = True
+            if boosted_any:
+                fused.sort(key=lambda x: -x.get("rrf_score", 0))
+
+        # Boost article match
+        target_article = intent.get("article_match")
+        if target_article:
+            boosted_any = False
+            for r in fused:
+                text = r.get("text", "")
+                if (f"điều {target_article}" in text.lower() or
+                    f"Điều {target_article}" in text):
+                    r["rrf_score"] = r.get("rrf_score", 0) + boost_score * 0.5
+                    boosted_any = True
+            if boosted_any:
+                fused.sort(key=lambda x: -x.get("rrf_score", 0))

@@ -84,7 +84,8 @@ class SettingsDialog(QDialog):
         self.top_k_spin.setMaximum(10)
         self.top_k_spin.setValue(4)
         self.top_k_spin.valueChanged.connect(self._on_top_k_changed)
-        params_layout.addRow("Số đoạn tra cứu (Top-K):", self.top_k_spin)
+        self.top_k_spin.setToolTip("Số evidence cuối cùng đưa vào ngữ cảnh LLM")
+        params_layout.addRow("Evidence cuối cùng (Top-K):", self.top_k_spin)
 
         # Info label (num_ctx tự động)
         self.info_label = QLabel("")

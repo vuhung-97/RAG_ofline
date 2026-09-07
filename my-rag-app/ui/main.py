@@ -92,7 +92,7 @@ class MainWindow(QMainWindow):
         self.embedding_service = OllamaEmbeddingService()
         self.vector_store = ChromaVectorStore()
         self.llm_service = OllamaLLMService()
-        self.bm25_index = BM25Index()
+        self.bm25_index = BM25Index(workspace=self.vector_store.current_workspace)
 
         # Try to load existing BM25 index
         if config.BM25_ENABLED:
@@ -263,6 +263,14 @@ class MainWindow(QMainWindow):
         """Khi đổi workspace."""
         self.ws_badge.setText(name)
         self.messages = []
+
+        # Load BM25 index cho workspace mới
+        self.bm25_index = BM25Index(workspace=name)
+        if config.BM25_ENABLED:
+            self.bm25_index.load()
+        self.rag_service.set_bm25_index(self.bm25_index)
+        self.document_service.bm25_index = self.bm25_index
+
         self.chat_area.clear_messages()
         self.chat_area.add_message(
             "assistant",
@@ -274,6 +282,14 @@ class MainWindow(QMainWindow):
         """Khi tạo workspace mới."""
         self.ws_badge.setText(name)
         self.messages = []
+
+        # Load BM25 index cho workspace mới
+        self.bm25_index = BM25Index(workspace=name)
+        if config.BM25_ENABLED:
+            self.bm25_index.load()
+        self.rag_service.set_bm25_index(self.bm25_index)
+        self.document_service.bm25_index = self.bm25_index
+
         self.chat_area.clear_messages()
         self.chat_area.add_message(
             "assistant",
@@ -435,9 +451,8 @@ class MainWindow(QMainWindow):
         else:
             full_text = ""
 
-        # Loại bỏ <think>...</think> khỏi text hiển thị và lưu trữ
-        import re as _re
-        full_text = _re.sub(r"<think>.*?</think>", "", full_text, flags=_re.DOTALL).strip()
+        # Instruct model: không có thinking blocks, dùng trực tiếp
+        full_text = full_text.strip()
 
         # Finalize streaming
         self.chat_area.finalize_streaming(full_text)

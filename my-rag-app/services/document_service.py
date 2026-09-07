@@ -50,13 +50,13 @@ class DocumentService:
         texts = [c["text"] for c in chunks]
         metadatas = [c["metadata"] for c in chunks]
 
-        # 4. Embed documents
+        # 4. Embed documents (với metadatas để tạo title cho embedding format)
         def embed_progress(current, total):
             if progress_callback:
                 progress_callback(current, total)
 
         embeddings = self.embedding_service.embed_documents(
-            texts, model_name=embed_model, progress_callback=embed_progress
+            texts, model_name=embed_model, metadatas=metadatas, progress_callback=embed_progress
         )
 
         # 5. Lưu vào ChromaDB Vector Store

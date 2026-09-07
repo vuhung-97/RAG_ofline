@@ -1,44 +1,32 @@
-"""PromptBuilder — SRP: quản lý và đóng gói các mẫu Prompt cho LLM."""
+"""PromptBuilder — SRP: quản lý và đóng gói các mẫu Prompt cho LLM.
+
+Sửa: Prompt ngắn gọn hơn cho instruct model, bỏ logic thinking.
+"""
 
 from typing import List, Dict, Any
 from config import config
 
-SYSTEM_PROMPT = """Bạn là trợ lý tra cứu tài liệu. Trả lời câu hỏi dựa trên ngữ cảnh.
+SYSTEM_PROMPT = """Bạn là trợ lý tra cứu tài liệu. Trả lời dựa trên Context bên dưới.
 
-NGUYÊN TẮC TUYỆT ĐỐI:
-- CHỈ dùng thông tin CÓ TRONG Context bên dưới.
+NGUYÊN TẮC:
+- CHỈ dùng thông tin CÓ TRONG Context.
 - KHÔNG bịa đặt, KHÔNG thêm kiến thức ngoài Context.
-- Nếu Context KHÔNG có thông tin → trả lời NGAY: "Tài liệu không đề cập đến thông tin này."
-- Mỗi dòng phải có một nhãn nguồn [1], [2]; nhãn nguồn chỉ đặt ở cuối dòng; chỉ dùng nhãn từ [1] đến [{num_chunks}].
-- Nếu Context thiếu thông tin về một bullet → KHÔNG bịa citation cho bullet đó.
-- KHÔNG viết danh sách "Citations:", "Trích nguồn:" hay "Tài liệu tham khảo:" ở cuối bài.
-- YÊU CẦU: Trả lời trực tiếp câu hỏi ngay lập tức. KHÔNG suy luận ngầm, KHÔNG xuất ra khối suy nghĩ <think>.
-
-CẤU TRÚC CÂU TRẢ LỜI:
-- Mỗi ý chính xuống dòng mới.
-- Cuối mỗi bullet có gán nhãn nguồn tham khảo [1], [2]
-- Dùng bullet (-) hoặc numbered list (1. 2. 3.).
-
+- Nếu Context KHÔNG có thông tin → trả lời: "Tài liệu không đề cập đến thông tin này."
+- Gắn nhãn nguồn [1], [2] ở cuối mỗi ý. Chỉ dùng nhãn từ [1] đến [{num_chunks}].
+- Không viết mục "Citations:", "Tài liệu tham khảo:" ở cuối.
+- Trả lời trực tiếp, rõ ràng.
 
 Ngữ cảnh:
 {context}"""
 
-SUMMARY_PROMPT = """Bạn là trợ lý tóm tắt tài liệu. Tóm tắt dựa trên ngữ cảnh.
+SUMMARY_PROMPT = """Bạn là trợ lý tóm tắt tài liệu. Tóm tắt dựa trên Context bên dưới.
 
-NGUYÊN TẮC TUYỆT ĐỐI:
-- CHỈ tóm tắt nội dung CÓ TRONG Context bên dưới.
+NGUYÊN TẮC:
+- CHỈ tóm tắt nội dung CÓ TRONG Context.
 - KHÔNG bịa đặt, KHÔNG thêm thông tin ngoài Context.
 - Nếu Context KHÔNG có thông tin → ghi: "Phần này không có trong tài liệu."
-- Nhãn nguồn chỉ đặt ở cuối bullet. Chỉ dùng nhãn từ [1] đến [{num_chunks}].
-- KHÔNG tự tạo khối "Citations:", "Trích nguồn:" hoặc "Tài liệu tham khảo:" ở cuối câu trả lời.
-- Nếu Context thiếu thông tin về một bullet → KHÔNG bịa citation cho bullet đó.
-
-
-CẤU TRÚC CÂU TRẢ LỜI:
-- Mỗi ý chính dùng bullet (-).
-- Đặt nhãn trích dẫn [1], [2] trực tiếp ở cuối mỗi dòng bullet.
-- Xuống dòng rõ ràng, dễ đọc.
-
+- Nhãn nguồn đặt ở cuối mỗi dòng bullet. Chỉ dùng nhãn từ [1] đến [{num_chunks}].
+- Không viết mục "Citations:", "Tài liệu tham khảo:" ở cuối.
 
 Ngữ cảnh:
 {context}"""
@@ -58,7 +46,7 @@ class PromptBuilder:
         system_content: str,
         user_query: str,
         chat_history: List[Dict[str, str]] = None,
-        enable_thinking: bool = True
+        enable_thinking: bool = False
     ) -> List[Dict[str, str]]:
         """Đóng gói danh sách messages gửi cho LLM (gồm system prompt, history, user query)."""
         messages = [{"role": "system", "content": system_content}]

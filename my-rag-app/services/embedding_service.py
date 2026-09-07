@@ -1,3 +1,8 @@
+"""Ollama Embedding Service — SRP: Tạo vector embedding với query/document prefix (EmbeddingGemma).
+
+Sửa: Document format dùng title: <title> | text: <chunk> thay vì task prefix.
+"""
+
 import re
 from typing import List
 import requests
@@ -5,11 +10,13 @@ from config import config
 
 
 def preprocess_query_text(text: str) -> str:
-    """Trích nội dung trong "" nếu có, nếu không lấy toàn bộ để tránh loãng vector."""
-    matches = re.findall(r'"([^"]+)"', text)
-    if matches:
-        return " ".join(matches).strip()
+    """Chỉ normalize whitespace, KHÔNG cắt ngoặc kép."""
     return text.strip()
+
+
+def extract_quoted_phrases(text: str) -> List[str]:
+    """Trích xuất nội dung trong ngoặc kép (dùng cho BM25 boost, KHÔNG thay semantic query)."""
+    return re.findall(r'"([^"]+)"', text)
 
 
 class OllamaEmbeddingService:
@@ -20,7 +27,24 @@ class OllamaEmbeddingService:
         self.api_url = f"{host}/api/embed"
         self.batch_size = batch_size
         self.query_prefix = config.EMBED_QUERY_PREFIX
-        self.doc_prefix = config.EMBED_DOC_PREFIX
+
+    @staticmethod
+    def _get_best_title(metadata: dict) -> str:
+        """Chọn title tốt nhất cho document embedding theo thứ tự ưu tiên."""
+        heading = metadata.get("heading", "")
+        if heading:
+            return heading
+        chapter = metadata.get("chapter", "")
+        if chapter:
+            return chapter
+        subheading = metadata.get("subheading", "")
+        if subheading:
+            return subheading
+        file_name = metadata.get("file_name", "")
+        if file_name:
+            import os
+            return os.path.splitext(file_name)[0]
+        return "none"
 
     def embed_query(self, text: str, model_name: str = config.EMBED_MODEL) -> List[float]:
         """Embed query với task prefix để phân biệt asymmetric encoding."""
@@ -31,10 +55,14 @@ class OllamaEmbeddingService:
         return self._embed_single(prefixed, model_name)
 
     def embed_documents(self, texts: List[str], model_name: str = config.EMBED_MODEL,
+                        metadatas: List[dict] = None,
                         progress_callback=None) -> List[List[float]]:
-        """Embed documents với task prefix + batch processing."""
-        prefixed_texts = [self.doc_prefix + t for t in texts]
-        return self.embed_batch(prefixed_texts, model_name, progress_callback)
+        """Embed documents với EMBED_DOC_PREFIX để đồng bộ với query prefix."""
+        formatted_texts = []
+        for text in texts:
+            formatted = config.EMBED_DOC_PREFIX + text
+            formatted_texts.append(formatted)
+        return self.embed_batch(formatted_texts, model_name, progress_callback)
 
     def embed_text(self, text: str, model_name: str = config.EMBED_MODEL) -> List[float]:
         """Legacy: embed without prefix (backward compat)."""

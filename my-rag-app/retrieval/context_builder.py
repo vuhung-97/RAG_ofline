@@ -1,11 +1,23 @@
-"""Context builder — SRP: chỉ build formatted context cho LLM."""
+"""Context builder — SRP: chỉ build formatted context cho LLM.
 
-from typing import List, Dict, Any
+Sửa: Table identity dùng (file_name, table_id) thay vì chỉ table_id.
+"""
+
+from typing import List, Dict, Any, Tuple
 from config import config
 
 
+def _get_table_key(metadata: dict) -> Tuple[str, int]:
+    """Tạo unique key cho table: (file_name, table_id).
+    Tránh merge nhầm giữa hai document khác nhau có cùng table_id.
+    """
+    file_name = metadata.get("file_name", "")
+    table_id = metadata.get("table_id", 0)
+    return (file_name, table_id)
+
+
 def _merge_table_chunks(chunks: List[Dict[str, Any]], max_chars: int = None) -> List[Dict[str, Any]]:
-    """Gom các chunks có cùng table_id thành chunk duy nhất.
+    """Gom các chunks có cùng (file_name, table_id) thành chunk duy nhất.
 
     Merge 2 chiều: chỉ cần có table_id → tìm tất cả chunks cùng table_id → merge.
     Truncate tại row boundary nếu vượt max_chars.
@@ -20,20 +32,21 @@ def _merge_table_chunks(chunks: List[Dict[str, Any]], max_chars: int = None) -> 
     if max_chars is None:
         max_chars = config.TABLE_MAX_CHARS
 
-    # Group chunks theo table_id
-    table_groups: Dict[int, List[Dict]] = {}
+    # Group chunks theo (file_name, table_id) — KHÔNG merge giữa các document
+    table_groups: Dict[Tuple[str, int], List[Dict]] = {}
     non_table_chunks = []
 
     for chunk in chunks:
         tid = chunk.get("metadata", {}).get("table_id")
         if tid is not None:
-            table_groups.setdefault(tid, []).append(chunk)
+            key = _get_table_key(chunk["metadata"])
+            table_groups.setdefault(key, []).append(chunk)
         else:
             non_table_chunks.append(chunk)
 
     # Merge mỗi group theo chunk_index
     merged_tables = []
-    for tid, group in table_groups.items():
+    for (file_name, tid), group in table_groups.items():
         # Sort theo chunk_index để đảm bảo thứ tự đúng
         group.sort(key=lambda c: c["metadata"].get("chunk_index", 0))
 
@@ -56,6 +69,7 @@ def _merge_table_chunks(chunks: List[Dict[str, Any]], max_chars: int = None) -> 
         merged_meta = group[0]["metadata"].copy()
         merged_meta["type"] = "table"
         merged_meta["table_id"] = tid
+        merged_meta["file_name"] = file_name
         merged_meta["chunk_count"] = len(group)
 
         merged_tables.append({

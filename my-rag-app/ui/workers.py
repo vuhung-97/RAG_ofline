@@ -1,7 +1,6 @@
 """QThread workers cho background tasks: Upload/Embed, Stream LLM, Load Models."""
 
 import os
-import re
 import tempfile
 import time
 from PyQt6.QtCore import QThread, pyqtSignal
@@ -106,22 +105,19 @@ class StreamWorker(QThread):
                 full_response += token
 
             if not self._is_cancelled and full_response:
-                # Lấy context đầy đủ từ merged_chunks (không cắt 200 ký tự)
+                # Lấy context đầy đủ từ merged_chunks
                 merged_chunks = result.get("merged_chunks", [])
                 context_text = "\n".join([c.get("text", "") for c in merged_chunks])
                 num_chunks = len(merged_chunks)
 
-                # Loại bỏ <think>...</think> trước khi guardrail đánh giá
-                response_for_validate = re.sub(r"<think>.*?</think>", "", full_response, flags=re.DOTALL).strip()
+                # Instruct model: không có thinking blocks, dùng trực tiếp
+                response_for_validate = full_response.strip()
 
                 validated = self.rag_service._validate_answer(response_for_validate, context_text, num_chunks)
 
                 if "Cảnh báo" in validated or validated != response_for_validate:
                     # Guardrail phát hiện vấn đề → hiển thị answer + cảnh báo phía dưới
                     self.answer_replaced.emit(validated)
-                elif response_for_validate != full_response:
-                    # <think> đã bị strip → cập nhật bubble hiển thị bản sạch
-                    self.answer_replaced.emit(response_for_validate)
 
             t_total = (time.perf_counter() - t_start) * 1000
             print(f"[RAG FINISH] 🏁 Hoàn tất toàn bộ quy trình! [TỔNG THỜI GIAN: {t_total:.1f} ms]\n")

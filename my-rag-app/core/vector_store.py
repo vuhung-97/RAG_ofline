@@ -1,5 +1,6 @@
 import os
 import re
+import json
 import unicodedata
 from typing import List, Dict, Any
 import chromadb
@@ -11,7 +12,11 @@ class ChromaVectorStore:
     def __init__(self, persist_dir: str = config.CHROMA_PERSIST_DIR):
         self.client = chromadb.PersistentClient(path=persist_dir)
         self.current_workspace = config.DEFAULT_WORKSPACE
-        self.collection = self.client.get_or_create_collection(name=self._sanitize_name(self.current_workspace))
+        self.collection = self.client.get_or_create_collection(
+            name=self._sanitize_name(self.current_workspace),
+            metadata={"hf:space": "cosine"}
+        )
+        self._cleanup_orphan_folders()
 
     def _sanitize_name(self, name: str) -> str:
         """Chuyển tên workspace thành tên collection ASCII hợp lệ trong ChromaDB (chỉ chứa a-z, 0-9, _, -)."""
@@ -30,8 +35,9 @@ class ChromaVectorStore:
         sanitized = self._sanitize_name(workspace_name)
         self.collection = self.client.get_or_create_collection(
             name=sanitized,
-            metadata={"original_name": workspace_name}
+            metadata={"original_name": workspace_name, "hf:space": "cosine"}
         )
+        self._check_version(sanitized)
 
     def list_workspaces(self) -> List[str]:
         """Lấy danh sách tên tất cả các workspace hiện có (tên gốc, không phải sanitized)."""
@@ -96,6 +102,41 @@ class ChromaVectorStore:
             print(f"[WARN] Xóa file '{file_name}': {e}")
         return 0
 
+    def _cleanup_orphan_folders(self):
+        """Xóa các folder UUID không gắn collection nào (orphan).
+
+        ChromaDB tạo folder UUID khi thêm data vào collection.
+        Khi delete_collection(), folder KHÔNG tự xóa → thành orphan.
+        Method này quét disk, so sánh với active collections, xóa orphan.
+        Handles file locks by retrying once after short delay.
+        """
+        import shutil
+        import time
+        try:
+            active_ids = {str(c.id) for c in self.client.list_collections()}
+            orphans = []
+            for entry in os.listdir(config.CHROMA_PERSIST_DIR):
+                full = os.path.join(config.CHROMA_PERSIST_DIR, entry)
+                if not os.path.isdir(full):
+                    continue
+                if len(entry) == 36 and entry.count('-') == 4:
+                    if entry not in active_ids:
+                        orphans.append(full)
+
+            for full in orphans:
+                try:
+                    shutil.rmtree(full)
+                except PermissionError:
+                    time.sleep(0.5)
+                    try:
+                        shutil.rmtree(full)
+                    except Exception:
+                        pass
+                except Exception:
+                    pass
+        except Exception:
+            pass
+
     def add_documents(self, ids: List[str], embeddings: List[List[float]], documents: List[str], metadatas: List[Dict[str, Any]]):
         """Thêm danh sách vector và văn bản vào collection hiện tại."""
         self.collection.add(
@@ -149,7 +190,37 @@ class ChromaVectorStore:
             self.client.delete_collection(name=sanitized)
         except Exception:
             pass
-        self.collection = self.client.get_or_create_collection(name=sanitized)
+        self.collection = self.client.get_or_create_collection(
+            name=sanitized,
+            metadata={"hf:space": "cosine"}
+        )
+        self._cleanup_orphan_folders()
+
+    def _check_version(self, sanitized_name: str):
+        """Kiểm tra index version khi startup. Nếu version cũ → in warning."""
+        version_file = os.path.join(config.CHROMA_PERSIST_DIR, f"{sanitized_name}_version.json")
+        current_version = config.INDEX_SCHEMA_VERSION
+        if os.path.exists(version_file):
+            try:
+                with open(version_file, "r") as f:
+                    data = json.load(f)
+                stored_version = data.get("schema_version", 0)
+                if stored_version < current_version:
+                    print(f"[WARN] Index '{sanitized_name}' version {stored_version} < required {current_version}. Re-index required.")
+            except Exception:
+                pass
+        else:
+            self._save_version(sanitized_name, current_version)
+
+    def _save_version(self, sanitized_name: str, version: int):
+        """Lưu index version."""
+        version_file = os.path.join(config.CHROMA_PERSIST_DIR, f"{sanitized_name}_version.json")
+        try:
+            os.makedirs(config.CHROMA_PERSIST_DIR, exist_ok=True)
+            with open(version_file, "w") as f:
+                json.dump({"schema_version": version}, f)
+        except Exception:
+            pass
 
     def clear_store_physical(self):
         """Xóa vật lý nhóm hiện tại - xóa luôn tên nhóm khỏi dropdown."""
