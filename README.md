@@ -10,7 +10,7 @@
 ![Platform](https://img.shields.io/badge/Platform-Windows-0078D6?style=flat-square&logo=windows)
 ![License](https://img.shields.io/badge/License-MIT-green?style=flat-square)
 
-**Abstract (EN):** Offline RAG desktop app for personal/office document Q&A. Built with PyQt6, Ollama (embeddinggemma:300m + qwen3:1.7b), ChromaDB and BM25 hybrid search with RRF fusion. Runs fully local without GPU, supports multi-workspace and cited answers.
+**Abstract (EN):** Offline RAG desktop app for personal/office document Q&A. Built with PyQt6, Ollama (`embeddinggemma:300m` + `qwen3:4b-instruct`), ChromaDB and BM25 hybrid search with RRF fusion. Runs fully local without GPU, supports multi-workspace and cited answers.
 
 ---
 
@@ -32,7 +32,7 @@
 
 ## 1. Giới thiệu
 
-Dự án xây dựng hệ thống **RAG tra cứu tài liệu** chạy hoàn toàn local trên laptop **không cần GPU**, không phụ thuộc cloud.
+Dự án xây dựng hệ thống **RAG tra cứu tài liệu** chạy hoàn toàn local trên máy cá nhân **không bắt buộc GPU**, không phụ thuộc cloud.
 
 *   **Bài toán:** Người dùng nạp nhiều tài liệu (Word, Excel, PowerPoint, PDF, Text) vào các "Nhóm tài liệu" (workspace) riêng biệt, sau đó đặt câu hỏi — hệ thống truy xuất đúng đoạn liên quan và trả lời có trích dẫn `[1]`, `[2]` rõ ràng.
 *   **Triết lý thiết kế:** SRP (Single Responsibility Principle) + Modular Architecture + Dependency Injection. Mỗi class chỉ làm một việc, phụ thuộc một chiều `UI → Services → Core/Retrieval → Config`.
@@ -46,10 +46,11 @@ Dự án xây dựng hệ thống **RAG tra cứu tài liệu** chạy hoàn to�
 |------|----------|
 | **Đa định dạng** | `.docx`, `.pdf`, `.pptx`, `.xlsx`, `.txt`, `.md`, `.doc` — chuyển qua **MarkItDown** → Markdown thống nhất (`core/markitdown_loader.py`) |
 | **Chunking thông minh** | `MarkdownHeaderTextSplitter (#, ##, ###)` → `RecursiveCharacterTextSplitter` (`CHUNK_SIZE=750`, `CHUNK_OVERLAP=200`). Bảng được bọc `TABLE_START/END` và gán `table_id` để không bị cắt vụn |
-| **Hybrid Search** | **Semantic (ChromaDB)** + **Keyword (BM25s)** → **RRF Fusion (k=60)** → Intent Boosting → Dedup → Neighbor Expansion |
-| **Chống ảo giác** | `GuardrailValidator` + `RelevanceChecker`: chỉ trả lời từ Context, nếu thiếu trả về _"Tài liệu không đề cập đến thông tin này."_ |
+| **Hybrid Search & Fusion** | **Semantic (ChromaDB)** + **Keyword (BM25s)** → **RRF Fusion (k=60)** → Intent Boosting → Dedup → LLM Reranking → Neighbor & Table Expansion |
+| **Query Rewrite & Follow-up** | Tự động nhận diện câu hỏi nối tiếp (Follow-up) và viết lại query tối ưu trước khi truy xuất (`retrieval/query_rewriter.py`) |
+| **Chống ảo giác** | `GuardrailValidator` + `RelevanceChecker`: chỉ trả lời từ Context, nếu thiếu trả về _"Không tìm thấy thông tin phù hợp trong tài liệu được cung cấp."_ |
 | **Workspace** | Đa không gian lưu trữ (mỗi workspace = 1 ChromaDB collection). Tạo/chuyển/xóa nhóm, xóa từng file, `VACUUM` SQLite khi xóa vật lý |
-| **Chat** | Streaming token theo thời gian thực, hiển thị typing indicator (hiệu ứng ba chấm đang nhảy), nút **Dừng** hủy stream, lịch sử `messages` (RAM) + `ChatLogger` JSONL |
+| **Chat & UI** | Streaming token theo thời gian thực, hiển thị typing indicator (hiệu ứng ba chấm đang nhảy), nút **Dừng** hủy stream, lịch sử `messages` (RAM) + `ChatLogger` JSONL |
 | **Cài đặt động** | Đổi LLM/Embedding model, `num_ctx`, `top_k`, `temperature`, `font_size`, `thinking`, `rerank` — persist vào `app_settings.json` |
 | **Hiệu năng** | Batch embedding 16, `keep_alive=5m` (tránh cold start 3-6s), đo TTFT (Time To First Token) và thời gian từng bước pipeline |
 
@@ -78,11 +79,14 @@ Dự án xây dựng hệ thống **RAG tra cứu tài liệu** chạy hoàn to�
 │  core/chunk_processor.py    chunk_id (MD5) + prev/next  │
 │  core/vector_store.py       ChromaVectorStore           │
 │  core/bm25_index.py         BM25Index (bm25s)           │
-│  core/reranker.py, perf_logger.py, app_settings.py      │
+│  core/reranker.py           LLMReranker (Reranking)     │
+│  core/perf_logger.py, app_settings.py, chat_logger.py   │
+│  retrieval/query_rewriter.py Follow-up & Rewrite Query  │
 │  retrieval/hybrid_searcher.py, fusion.py (RRF)          │
 │  retrieval/dedup.py, neighbor_expander.py               │
 │  retrieval/context_builder.py, prompt_builder.py        │
 │  retrieval/guardrail.py, relevance_checker.py           │
+│  retrieval/intent_analyzer.py                           │
 └──────────────────────┬──────────────────────────────────┘
                        │
 ┌──────────────────────▼──────────────────────────────────┐
@@ -100,8 +104,10 @@ Dự án xây dựng hệ thống **RAG tra cứu tài liệu** chạy hoàn to�
 | `OllamaEmbeddingService` | Chỉ gọi `/api/embed` với prefix asymmetric |
 | `ChromaVectorStore` | Chỉ `add/query/delete` ChromaDB |
 | `BM25Index` | Chỉ `build/search/save/load` BM25 |
+| `QueryRewriter` | Chỉ kiểm tra follow-up và làm rõ query dựa theo lịch sử |
+| `LLMReranker` | Chỉ đánh giá và sắp xếp lại thứ tự liên quan của các chunks |
 | `DocumentService` | Điều phối `Loader → Processor → Embed → Store` |
-| `RAGService` | Điều phối `Embed Query → Hybrid Search → Context → LLM` |
+| `RAGService` | Điều phối `Query Rewrite → Hybrid Search → Rerank → Context → LLM` |
 | `PromptBuilder` | Chỉ build `system_content` + `messages` |
 | `ui/*` | Chỉ render, không chứa business logic |
 
@@ -112,6 +118,7 @@ Dự án xây dựng hệ thống **RAG tra cứu tài liệu** chạy hoàn to�
 ```text
 RAG_project/
 ├── README.md
+├── REPORT.md                     # Báo cáo kỹ thuật chi tiết
 ├── .gitignore
 └── my-rag-app/
     ├── config.py                 # Tham số hệ thống duy nhất
@@ -127,7 +134,7 @@ RAG_project/
     │   ├── chunk_processor.py    # MD5 chunk_id + liên kết prev/next
     │   ├── vector_store.py       # ChromaVectorStore multi-workspace
     │   ├── bm25_index.py         # BM25Index (bm25s)
-    │   ├── reranker.py           # Reranking (optional)
+    │   ├── reranker.py           # LLMReranker
     │   ├── app_settings.py       # Load/save JSON
     │   ├── chat_logger.py        # Ghi log hội thoại
     │   └── perf_logger.py        # Đo thời gian pipeline
@@ -139,10 +146,11 @@ RAG_project/
     │   └── llm_service.py        # Ollama chat streaming
     │
     ├── retrieval/
+    │   ├── query_rewriter.py     # Nhận diện follow-up & rewrite query
     │   ├── hybrid_searcher.py    # Semantic + BM25 → RRF
     │   ├── fusion.py             # reciprocal_rank_fusion
     │   ├── dedup.py              # deduplicate_chunks
-    │   ├── neighbor_expander.py  # Mở rộng chunk lân cận
+    │   ├── neighbor_expander.py  # Mở rộng chunk lân cận cùng section
     │   ├── context_builder.py    # Budget max_tokens, format sources
     │   ├── prompt_builder.py     # SYSTEM_PROMPT / SUMMARY_PROMPT
     │   ├── guardrail.py          # Validate chống bịa đặt
@@ -155,7 +163,7 @@ RAG_project/
         ├── chat_area.py          # Render bubble + sources + streaming
         ├── chat_input.py         # Ô nhập + nút Gửi/Dừng
         ├── chat_message.py       # Single message widget
-        ├── settings_dialog.py    # Dialog cài đặt model
+        ├── settings_dialog.py    # Dialog cài đặt model & tham số RAG
         ├── workers.py            # QThread: UploadWorker, StreamWorker
         ├── styles.py             # LIGHT_THEME
         └── typing_indicator.py   # Hiệu ứng 3 chấm
@@ -167,11 +175,16 @@ RAG_project/
 
 ### 5.1. Ollama
 
-Ứng dụng sử dụng **Ollama** để chạy mô hình LLM và Embedding hoàn toàn offline trên máy local. Ollama là nền tảng giúp đóng gói và vận hành các mô hình ngôn ngữ lớn ngay trên máy cá nhân mà không cần gửi dữ liệu ra ngoài.
+Ứng dụng sử dụng **Ollama** để chạy mô hình LLM và Embedding hoàn toàn offline trên máy local.
 
 Tải và cài đặt Ollama tại trang chính thức: **https://ollama.com/download**
 
-Sau khi cài đặt, làm theo hướng dẫn trên trang Ollama để tải các model cần thiết và khởi chạy dịch vụ nền `ollama serve`.
+Sau khi cài đặt, tải các mô hình khuyến nghị bằng terminal:
+```bash
+ollama pull qwen3:4b-instruct
+ollama pull embeddinggemma:300m
+```
+Vận hành dịch vụ nền `ollama serve`.
 
 ### 5.2. Cài ứng dụng
 
@@ -229,7 +242,7 @@ python my-rag-app\ui\main.py
 2.  Progress bar hiển thị `%` và `current/total` batch embedding.
 3.  Tránh nạp trùng: nếu `file_name` đã tồn tại trong nhóm → báo `skipped`.
 4.  File rỗng / không trích được text → báo `warning`.
-5.  Sau khi xong: sidebar tự refresh danh sách `📄 File đã nạp:` — mỗi file có nút `🗑️` xóa riêng (chỉ xóa file, giữ nhóm và chat).
+5.  Sau khi xong: sidebar tự refresh danh sách `📄 File đã nạp:` — mỗi file có nút `🗑️` xóa riêng.
 
 **Luồng ingest (`services/document_service.py:process_and_index_file`):**
 
@@ -253,21 +266,16 @@ Nhấn `⚙️ Cài Đặt Model` → dialog cho phép đổi:
 
 | Tham số | Mặc định | Mô tả |
 |---------|----------|-------|
-| `selected_llm` | `qwen3:1.7b` | Chọn trong `ollama list` (lọc `llm`) |
+| `selected_llm` | `qwen3:4b-instruct` | Chọn trong `ollama list` (lọc `llm`) |
 | `selected_embed` | `embeddinggemma:300m` | Chọn trong `ollama list` (lọc `embed`) |
 | `num_ctx` | `8192` | Context window gửi Ollama |
 | `top_k` | `6` | Số chunk cuối cùng đưa vào prompt |
-| `temperature` | `0.0` | Độ ngẫu nhiên (0 = xác định/deterministic) |
-| `font_size` | `10` | Áp dụng toàn app qua `QFont("Segoe UI")` |
-| `enable_thinking` | `true` | Bật/tắt `<think>` của Qwen3 |
-| `enable_rerank` | `true` | Bật/tắt reranking |
+| `temperature` | `0.1` | Độ ngẫu nhiên (0.1 = deterministic) |
+| `font_size` | `12` | Áp dụng toàn app qua `QFont("Segoe UI")` |
+| `enable_thinking` | `false` | Bật/tắt `<think>` của Qwen3 |
+| `enable_rerank` | `true` | Bật/tắt LLM reranking |
 
 Nhấn **Lưu** → ghi `app_settings.json` → áp dụng font ngay + cập nhật header `LLM: ... | Context: ... | Top-K: ...`.
-
-### 7.5. Bộ nhớ
-
-*   `🗑️ Xóa Chat` — chỉ xóa `messages` trong RAM, không xóa DB.
-*   `⚠️ Xóa Nhóm` — xóa DB vật lý như mô tả trên.
 
 ---
 
@@ -278,12 +286,12 @@ Toàn bộ tham số tập trung tại `my-rag-app/config.py` (dataclass `Config
 | Tham số | Giá trị | Ý nghĩa |
 |---------|---------|---------|
 | `EMBED_MODEL` | `embeddinggemma:300m` | Model embedding Ollama |
-| `LLM_MODEL` | `qwen3:1.7b` | Model LLM Ollama |
+| `LLM_MODEL` | `qwen3:4b-instruct` | Model LLM Ollama |
 | `OLLAMA_HOST` | `http://localhost:11434` | Endpoint Ollama |
 | `OLLAMA_KEEP_ALIVE` | `5m` | Giữ model trong RAM 5 phút sau idle |
 | `LLM_NUM_CTX` | `8192` | Fallback mặc định — giá trị thực từ `app_settings.json` |
-| `TEMPERATURE` | `0.0` | Deterministic |
-| `ENABLE_THINKING` | `True` | Cho phép Qwen3 thinking |
+| `TEMPERATURE` | `0.1` | Low temperature cho độ chính xác cao |
+| `ENABLE_THINKING` | `False` | Tắt thinking cho model instruct |
 | `EMBED_QUERY_PREFIX` | `task: search result | query: ` | Prefix asymmetric cho query |
 | `EMBED_DOC_PREFIX` | `task: search result | document: ` | Prefix asymmetric cho document |
 | `EMBED_DIMENSION` | `768` | Chiều embedding |
@@ -294,29 +302,36 @@ Toàn bộ tham số tập trung tại `my-rag-app/config.py` (dataclass `Config
 | `CHUNK_SIZE` | `750` | Kích thước chunk (ký tự) |
 | `CHUNK_OVERLAP` | `200` | Overlap giữa chunks |
 | `TABLE_MAX_CHARS` | `8000` | Max ký tự cho 1 bảng sau merge |
-| `TOP_K` | `6` | Top-K cuối cùng |
-| `ENABLE_RERANK` | `True` | Bật rerank |
-| `DISTANCE_THRESHOLD` | `1.10` | Lọc kết quả semantic kém |
+| `SEMANTIC_TOP_K` | `24` | Số chunk Semantic retrieval lấy |
+| `BM25_TOP_K` | `24` | Số chunk BM25 retrieval lấy |
+| `FUSION_TOP_K` | `20` | Số chunk sau RRF fusion |
+| `FINAL_TOP_K` | `6` | Top-K cuối cùng đưa vào context |
+| `ENABLE_RERANK` | `True` | Bật LLM rerank |
+| `DISTANCE_THRESHOLD` | `1.4` | Lọc kết quả semantic Cosine distance |
 | `CHROMA_PERSIST_DIR` | `my-rag-app/chroma_db` | Đường dẫn Chroma |
 | `BM25_ENABLED` | `True` | Bật BM25 |
 | `RRF_K` | `60` | Hằng số RRF |
 | `ENABLE_NEIGHBOR_EXPANSION` | `True` | Mở rộng chunk lân cận |
 | `NEIGHBOR_SAME_SECTION_ONLY` | `True` | Chỉ mở rộng cùng section |
 | `NEIGHBOR_MAX_EXPANSION` | `1` | Số chunk mở rộng tối đa |
-| `FONT_SIZE` | `10` | Cỡ chữ mặc định |
+| `CONTEXT_BUDGET_EVIDENCE` | `3500` | Token budget cho evidence context |
 
 Cài đặt người dùng ghi đè được lưu tại `my-rag-app/app_settings.json`:
 
 ```json
 {
-  "selected_llm": "qwen3:1.7b",
+  "selected_llm": "qwen3:4b-instruct",
   "selected_embed": "embeddinggemma:300m",
-  "num_ctx": 4096,
-  "top_k": 2,
+  "num_ctx": 8192,
+  "top_k": 6,
   "temperature": 0.1,
   "font_size": 12,
   "enable_thinking": false,
-  "enable_rerank": true
+  "enable_rerank": true,
+  "semantic_top_k": 24,
+  "bm25_top_k": 24,
+  "fusion_top_k": 20,
+  "final_top_k": 6
 }
 ```
 
@@ -324,56 +339,58 @@ Cài đặt người dùng ghi đè được lưu tại `my-rag-app/app_settings
 
 ## 9. Pipeline RAG chi tiết
 
-Triển khai tại `services/rag_service.py:query` (9 bước, có log thời gian từng bước):
+Triển khai tại `services/rag_service.py:query` (11 bước, có log thời gian từng bước):
 
 ```text
 User Query
   │
+  ├─ 0. FollowUpDetector & QueryRewriter
+  │     → Nếu là câu hỏi nối tiếp, viết lại query đầy đủ ngữ cảnh từ lịch sử chat.
+  │
   ├─ 1. IntentAnalyzer.detect_intent(query)
-  │     → is_summary? (tăng top_k x5, num_ctx → 8192)
+  │     → is_summary? chapter/section match?
   │
   ├─ 2. OllamaEmbeddingService.embed_query(query, prefix="task: search result | query: ")
   │     → query_vector (768d)  [~t_embed ms]
   │
-├─ 3. HybridSearcher.search(query, query_vector, top_k, top_k, top_k)
-│     ├─ ChromaVectorStore.search_similarity(query_vector, top_k)  [semantic]
-│     ├─ BM25Index.search(query, top_k)                            [keyword]
-│     ├─ reciprocal_rank_fusion(semantic, bm25, k=60)               [RRF]
-│     └─ Intent boosting (+0.01 nếu match chapter/heading)          [~t_search ms]
+  ├─ 3. HybridSearcher.search(query, query_vector)
+  │     ├─ ChromaVectorStore.search_similarity (Semantic top-24)
+  │     ├─ BM25Index.search (Keyword top-24)
+  │     ├─ reciprocal_rank_fusion (RRF k=60 -> top-20)
+  │     └─ Intent boosting (+0.01 nếu match chapter/heading)  [~t_search ms]
   │
   ├─ 4. deduplicate_chunks(fused_results)
   │
-  ├─ 5. expand_neighbors(deduped, chunks_map, max_expansion=1, same_section_only=True)
-  │     → lấy prev/next IDs từ Chroma metadata, mở rộng cùng section  [~t_neighbor ms]
+  ├─ 5. LLMReranker.rerank(query, deduped, top_k=6)  [Skip nếu là summary]
   │
-  ├─ 6. build_context(expanded, max_chunks=top_k, max_tokens=num_ctx-1000)
+  ├─ 6. expand_neighbors(deduped, chunks_map, max_expansion=1, same_section_only=True)
+  │     → Lấy prev/next IDs từ Chroma metadata, mở rộng cùng section  [~t_neighbor ms]
+  │
+  ├─ 7. _expand_tables(expanded)
+  │     → Gom trọn vẹn các chunks thuộc cùng bảng dài
+  │
+  ├─ 8. build_context(final_chunks, max_tokens=3500)
   │     → formatted_context (Markdown với [1], [2]...), merged_chunks  [~t_context ms]
-  │     → format_sources_for_ui(merged_chunks)  → hiển thị bộ mở rộng nguồn
   │
-  ├─ 7. has_sufficient_relevance(merged_chunks) + Guardrail check
-  │     → nếu rỗng / không đủ relevance → trả về "Không tìm thấy..." (no_context=True)
+  ├─ 9. has_sufficient_relevance(merged_chunks)
+  │     → Nếu rỗng / không đủ độ liên quan → Trả về thông báo không tìm thấy
   │
-  ├─ 8. PromptBuilder.build_system_content(is_summary, context, num_chunks)
-  │     PromptBuilder.build_messages(system, query, chat_history[-4:], enable_thinking)
-  │     → messages = [system, ...history, user]  (thêm /no_think nếu tắt thinking)
+  ├─ 10. PromptBuilder.build_system_content & build_messages
+  │      → Tạp prompt chuẩn mực có trích dẫn [1]..[n]
   │
-  └─ 9. OllamaLLMService.stream_chat(messages, model, num_ctx, temperature, think)
-        → Generator[str] streaming, đo TTFT, yield từng token
-        → GuardrailValidator.validate_answer(answer, context) hậu kiểm
+  └─ 11. OllamaLLMService.stream_chat(...)
+         → Generator[str] streaming token theo thời gian thực
+         → GuardrailValidator.validate_answer(...) hậu kiểm chống bịa đặt
 ```
 
-**System Prompt (`retrieval/prompt_builder.py:SYSTEM_PROMPT`):**
+---
 
-> Chỉ dùng thông tin trong Context, không bịa đặt, mỗi dòng có nhãn `[1]..[n]` ở cuối dòng, không tự tạo khối Citations ở cuối, nếu thiếu → _"Tài liệu không đề cập đến thông tin này."_
-
-**Guardrail (`retrieval/guardrail.py`):**
-
-> Sau khi LLM sinh xong, GuardrailValidator kiểm tra citation hợp lệ, độ dài answer/context, và word overlap. Nếu có vấn đề → hiển thị answer gốc kèm cảnh báo ⚠️ phía dưới (không xóa answer).
+## 10. Xử lý sự cố
 
 | Triệu chứng | Nguyên nhân | Cách khắc phục |
 |-------------|-------------|----------------|
-| `Lỗi kết nối Ollama` | `ollama serve` chưa chạy | Mở Ollama app hoặc chạy lệnh `ollama serve` trong terminal, kiểm tra `http://localhost:11434/api/tags` |
-| `model not found` | Chưa pull model | Tham khảo hướng dẫn tải model trên trang Ollama: https://ollama.com/library |
+| `Lỗi kết nối Ollama` | `ollama serve` chưa chạy | Mở Terminal và chạy lệnh `ollama serve`, kiểm tra `http://localhost:11434/api/tags` |
+| `model not found` | Chưa pull model | Chạy `ollama pull qwen3:4b-instruct` và `ollama pull embeddinggemma:300m` |
 | Timeout embedding (180s) | File quá lớn / batch quá nặng | Giảm `EMBED_BATCH_SIZE` trong `config.py`, chia nhỏ file |
 | Timeout LLM (120s) | `num_ctx` quá lớn / prompt quá dài | Giảm `num_ctx` hoặc `top_k` trong Settings |
 | `Chroma lock` / không xóa được collection | DB đang mở ở process khác | Đóng app, xóa `chroma.sqlite3-journal` nếu kẹt, khởi động lại |
@@ -396,19 +413,18 @@ User Query
 **Roadmap gợi ý:**
 
 *   [ ] Thêm OCR (Tesseract / PaddleOCR) cho PDF scan.
-*   [ ] Reranker cross-encoder (Qwen3-Rerank) thay heuristic.
+*   [ ] Reranker cross-encoder thay heuristic.
 *   [ ] Export chat + sources ra PDF/Markdown.
-*   [ ] Hỗ trợ thêm `.csv`, `.html` qua `CsvLoader`/`HtmlLoader` (OCP — Open-Closed Principle: chỉ thêm 1 file + 1 dòng trong factory).
+*   [ ] Hỗ trợ thêm `.csv`, `.html` qua `CsvLoader`/`HtmlLoader` (OCP — Open-Closed Principle).
 *   [ ] Đóng gói installer `.exe` (PyInstaller) kèm Ollama embedded.
 
 ---
 
 ## Giấy phép & Tác giả
 
-*   License: **MIT** (đề xuất — thay đổi nếu cần).
+*   License: **MIT**.
 *   Tác giả: Nhóm CNTT14 — Dự án RAG Tra Cứu Tài Liệu.
-*   Liên hệ: _điền email / GitHub_.
 
 ---
 
-> **Ghi chú:** Toàn bộ tham số, đường dẫn và luồng xử lý trong README được trích từ mã nguồn thực tế (`config.py`, `core/*`, `services/*`, `retrieval/*`, `ui/main.py`). Không tham chiếu tài liệu kế hoạch cũ đã lỗi thời.
+> **Ghi chú:** Toàn bộ tham số, đường dẫn và luồng xử lý trong README được trích từ mã nguồn thực tế (`config.py`, `core/*`, `services/*`, `retrieval/*`, `ui/main.py`).
